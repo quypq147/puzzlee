@@ -1,0 +1,207 @@
+# Project Tree
+
+```text
+.env.example
+.env.local
+.gitignore
+components.json
+eslint.config.mjs
+next-env.d.ts
+next.config.ts
+package.json
+postcss.config.mjs
+PROJECT_TREE.md
+README.md
+tsconfig.json
+public/
+  apple-icon.png
+  file.svg
+  globe.svg
+  icon-dark-32x32.png
+  icon-light-32x32.png
+  icon.svg
+  next.svg
+  placeholder-logo.png
+  placeholder-logo.svg
+  placeholder-user.jpg
+  placeholder.jpg
+  placeholder.svg
+  vercel.svg
+  window.svg
+app/
+  favicon.ico
+  globals.css
+  layout.tsx
+  page.tsx
+  (auth)/
+    callback/
+    confirm/
+      route.ts
+    error/
+      page.tsx
+    forgot-password/
+      page.tsx
+    login/
+      page.tsx
+    register/
+      page.tsx
+    sign-out/
+      route.ts
+    sign-up-success/
+      page.tsx
+    update-password/
+      page.tsx
+  (dashboard)/
+    dashboard/
+      layout.tsx
+      page.tsx
+    events/
+      [eventId]/
+        page.tsx
+        setting/
+          page.tsx
+      new/
+        page.tsx
+  (event)/
+    [code]/
+      page.tsx
+      room.tsx
+    join/
+      page.tsx
+  (landing)/
+    page.tsx
+    about-us/
+      page.tsx
+  admin/
+    layout.tsx
+    page.tsx
+  api/
+    answers/
+      route.ts
+    auth/
+      route.ts
+    comments/
+      route.ts
+    events/
+      route.ts
+    join/
+      route.ts
+    questions/
+      route.ts
+    votes/
+      route.ts
+    webhook/
+      route.ts
+  protected/
+    page.tsx
+components/
+  answer-card.tsx
+  create-event-dialog.tsx
+  event-card.tsx
+  event-members-list.tsx
+  forgot-password-form.tsx
+  join-event-dialog.tsx
+  login-form.tsx
+  logout-button.tsx
+  moderation-panel.tsx
+  sign-up-form.tsx
+  update-password-form.tsx
+  realtime-questions-list.tsx
+  question-card.tsx
+  question-form.tsx
+  questions-list.tsx
+  theme-provider.tsx
+  vote-button.tsx
+  layout/
+    footer.tsx
+    header.tsx
+  ui/
+    accordion.tsx
+    alert-dialog.tsx
+    alert.tsx
+    answer-card.tsx
+    aspect-ratio.tsx
+    avatar.tsx
+    badge.tsx
+    breadcrumb.tsx
+    button-group.tsx
+    button.tsx
+    calendar.tsx
+    card.tsx
+    carousel.tsx
+    chart.tsx
+    checkbox.tsx
+    collapsible.tsx
+    command.tsx
+    context-menu.tsx
+    create-event-dialog.tsx
+    dialog.tsx
+    drawer.tsx
+    dropdown-menu.tsx
+    empty.tsx
+    event-card.tsx
+    event-members-list.tsx
+    field.tsx
+    form.tsx
+    hover-card.tsx
+    input-group.tsx
+    input-otp.tsx
+    input.tsx
+    item.tsx
+    join-event-dialog.tsx
+    kbd.tsx
+    label.tsx
+    menubar.tsx
+    moderation-panel.tsx
+    navigation-menu.tsx
+    pagination.tsx
+    popover.tsx
+    progress.tsx
+    question-card.tsx
+    question-form.tsx
+    questions-list.tsx
+    radio-group.tsx
+    realtime-questions-list.tsx
+    resizable.tsx
+    scroll-area.tsx
+    select.tsx
+    separator.tsx
+    sheet.tsx
+    sidebar.tsx
+    skeleton.tsx
+    slider.tsx
+    sonner.tsx
+    spinner.tsx
+    switch.tsx
+    table.tsx
+    tabs.tsx
+    textarea.tsx
+    theme-provider.tsx
+    toast.tsx
+    toaster.tsx
+    toggle-group.tsx
+    toggle.tsx
+    tooltip.tsx
+    use-mobile.tsx
+    use-toast.ts
+    vote-button.tsx
+hooks/
+  use-auth.tsx
+  use-event-realtime.ts
+  use-mobile.ts
+  use-realtime-questions.ts
+  use-toast.ts
+lib/
+  auth.ts
+  db.ts
+  realtime.ts
+  utils.ts
+  validations.ts
+  api/
+    event.ts
+    user.ts
+  supabase/
+    client.ts
+    middleware.ts
+    server.ts
+```
