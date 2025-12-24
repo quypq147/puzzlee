@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/api";
 
 export function SignUpForm({
   className,
@@ -42,12 +42,7 @@ export function SignUpForm({
       return;
     }
     setIsCheckingUsername(true);
-    const supabase = createClient();
-    const { data: existing, error: usernameError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", u)
-      .maybeSingle();
+    const { data: existing, error: usernameError } = await api.get(`/api/profiles?username=${u}`);
     if (usernameError) {
       setIsUsernameAvailable(null);
     } else {
@@ -58,7 +53,6 @@ export function SignUpForm({
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 

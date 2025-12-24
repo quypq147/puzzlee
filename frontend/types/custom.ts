@@ -1,17 +1,47 @@
-// types/custom.ts
-import { Database } from './supabase';
+// frontend/types/custom.ts
 
-export type Question = Database['public']['Tables']['questions']['Row'];
-export type QuestionOption = Database['public']['Tables']['question_options']['Row'];
-export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type UserRole = "USER" | "ADMIN";
+export type EventRole = "PARTICIPANT" | "MODERATOR" | "HOST";
+export type QuestionStatus = "VISIBLE" | "HIDDEN" | "ANSWERED";
 
-// Type mở rộng để hiển thị UI
-export type QuestionExtended = Question & {
-  profiles: Profile | null; // Người tạo
-  question_options?: (QuestionOption & {
-    response_count?: number; // Số lượng người chọn (tính từ poll_responses)
-    is_voted_by_me?: boolean; // User hiện tại đã chọn option này chưa
-  })[];
-  user_vote_value?: number; // Cho Q&A: 1 (Upvote) hoặc -1 (Downvote)
-  answers_count?: number; // Số lượng bình luận
-};
+export interface User {
+  id: string;
+  email: string;
+  username: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
+  role: UserRole;
+}
+
+export interface Event {
+  id: string;
+  title: string;
+  description: string | null;
+  code: string;
+  isActive: boolean;
+  startTime: string | null; // JSON trả về string cho Date
+  createdAt: string;
+  _count?: {
+    members: number;
+    questions: number;
+  };
+}
+
+export interface Question {
+  id: string;
+  eventId: string;
+  content: string;
+  isAnonymous: boolean;
+  status: QuestionStatus;
+  isPinned: boolean;
+  isAnswered: boolean;
+  score: number;
+  createdAt: string;
+  author: {
+    id: string;
+    username: string;
+    fullName: string | null;
+    avatarUrl: string | null;
+  } | null;
+  userVote?: number; // 1 (upvote) hoặc 0
+}

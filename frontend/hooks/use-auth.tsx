@@ -1,4 +1,3 @@
-// hooks/use-auth.tsx
 "use client";
 
 import {
@@ -8,101 +7,104 @@ import {
   useState,
   ReactNode,
 } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
-type Profile = {
+// Định nghĩa kiểu dữ liệu User dựa trên backend trả về
+export type UserProfile = {
   id: string;
-  first_name: string | null;
-  second_name: string | null;
-  avatar_url: string | null;
-  username?: string | null;
+  email: string;
+  username: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
   role: string | null;
 };
 
 type AuthContextValue = {
-  user: User | null;
-  session: Session | null;
-  profile: Profile | null;
+  user: UserProfile | null;
   loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: { email: string; password: string; username: string; fullName: string }) => Promise<void>;
+  logout: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
-  session: null,
-  profile: null,
   loading: true,
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
 });
 
+const API_URL = "http://localhost:4000/api/auth";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  // Hàm load user từ token khi mới vào trang
   useEffect(() => {
-    const supabase = createClient();
-
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      setSession(session ?? null);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      }
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetch(`${API_URL}/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            const userData = await res.json();
+            setUser(userData);
+          } else {
+            // Token hết hạn hoặc không hợp lệ
+            localStorage.removeItem("token");
+            setUser(null);
+          }
+        })
+        .catch(() => setUser(null))
+        .finally(() => setLoading(false));
+    } else {
       setLoading(false);
-    };
-
-    const fetchProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, first_name, second_name, avatar_url, username")
-        .eq("id", userId)
-        .single();
-      if (!error && data) {
-        const row = data as {
-          id: string;
-          first_name: string | null;
-          second_name: string | null;
-          avatar_url: string | null;
-          username: string | null;
-        };
-        const p: Profile = {
-          id: row.id,
-          first_name: row.first_name ?? null,
-          second_name: row.second_name ?? null,
-          avatar_url: row.avatar_url ?? null,
-          username: row.username ?? null,
-          role: null,
-        };
-        setProfile(p);
-      }
-    };
-
-    init();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    }
   }, []);
 
+  const login = async (email: string, password: string) => {
+    const res = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Đăng nhập thất bại");
+
+    // Lưu token và set user
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    router.push("/dashboard"); // Redirect sau khi login
+  };
+
+  const register = async (payload: { email: string; password: string; username: string; fullName: string }) => {
+    const res = await fetch(`${API_URL}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Đăng ký thất bại");
+    
+    // Đăng ký xong có thể tự động login hoặc bắt user login lại. 
+    // Ở đây ta chuyển hướng trang login
+    router.push("/login"); 
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+    router.push("/login");
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
