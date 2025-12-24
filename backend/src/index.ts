@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
-import eventRoutes from "./routes/eventRoutes"; // Ví dụ route API
+import AuthRoutes from "./routes/authRoutes";
 
 const app = express();
 const server = http.createServer(app);
