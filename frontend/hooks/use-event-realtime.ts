@@ -1,30 +1,39 @@
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { subscribeToEventQuestions } from "@/lib/realtime";
+"use client";
 
-export function useEventQuestions(eventId: string) {
-  const [questions, setQuestions] = useState<any[]>([]);
+import { useEffect } from "react";
+import { getSocket } from "@/lib/socket";
+import { Question } from "@/lib/api/questions";
 
+interface UseEventRealtimeProps {
+  eventId: string;
+  onNewQuestion: (q: Question) => void;
+  onUpdateVote: (q: Question) => void;
+}
+
+export function useEventRealtime({ eventId, onNewQuestion, onUpdateVote }: UseEventRealtimeProps) {
   useEffect(() => {
     if (!eventId) return;
 
-    const supabase = createClient();
+    const socket = getSocket();
 
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false })
-      .then((res) => {
-        setQuestions(res.data ?? []);
-      });
+    // 1. Kết nối và Join room
+    if (!socket.connected) socket.connect();
+    socket.emit("join-event", eventId);
 
-    const unsubscribe = subscribeToEventQuestions(eventId, (q) => {
-      setQuestions((prev) => [q, ...prev]);
+    // 2. Lắng nghe sự kiện
+    socket.on("new-question", (newQuestion: Question) => {
+      onNewQuestion(newQuestion);
     });
 
-    return () => unsubscribe();
-  }, [eventId]);
+    socket.on("update-vote", (updatedQuestion: Question) => {
+      onUpdateVote(updatedQuestion);
+    });
 
-  return { questions };
+    // 3. Cleanup
+    return () => {
+      socket.off("new-question");
+      socket.off("update-vote");
+      // socket.disconnect(); // Tùy chọn: có thể giữ kết nối để chuyển trang nhanh hơn
+    };
+  }, [eventId, onNewQuestion, onUpdateVote]);
 }
