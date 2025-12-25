@@ -11,19 +11,21 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
 import { Users, MoreHorizontal, ShieldPlus, ShieldMinus, UserX, Loader2 } from "lucide-react"
-import { toast } from "sonner"
+import { useToast } from "@/components/ui/use-toast"
+import { apiClient } from "@/lib/api-client"
 import { RoleBadge } from "@/components/ui/role-badge"
 
 interface Member {
-  id: string
-  user_id: string
-  role: string
+  userId: string // API trả về userId (hoặc id của profile)
+  eventId: string
+  role: "HOST" | "MODERATOR" | "PARTICIPANT"
+  joinedAt: string
   user: {
-    display_name: string
+    fullName: string | null
+    username: string
+    avatarUrl: string | null
     email: string
-    avatar_url?: string
   }
-  joined_at: string
 }
 
 interface EventMembersListProps {
@@ -41,110 +43,103 @@ export function EventMembersList({
   eventId,
   onMemberUpdated 
 }: EventMembersListProps) {
-  const [isLoading, setIsLoading] = useState<string | null>(null);
+  const { toast } = useToast()
+  const [loadingId, setLoadingId] = useState<string | null>(null)
 
-  const handleRoleUpdate = async (userId: string, newRole: string) => {
-    setIsLoading(userId);
+  const handleRoleUpdate = async (targetUserId: string, newRole: string) => {
+    setLoadingId(targetUserId)
     try {
-      const res = await fetch(`/api/events/${eventId}/members/manage`, {
+      // Gọi API Update Role
+      await apiClient(`/events/${eventId}/members`, {
         method: "PATCH",
-        body: JSON.stringify({ userId, role: newRole }),
-      });
-      
-      if (!res.ok) throw new Error();
-      
-      toast.success("Đã cập nhật vai trò thành công");
-      onMemberUpdated?.();
-    } catch (error) {
-      toast.error("Không thể cập nhật vai trò");
+        body: JSON.stringify({ userId: targetUserId, role: newRole })
+      })
+      toast({ title: "Thành công", description: "Đã cập nhật quyền thành viên" })
+      onMemberUpdated?.()
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Lỗi", description: error.message || "Không thể cập nhật quyền" })
     } finally {
-      setIsLoading(null);
+      setLoadingId(null)
     }
-  };
+  }
 
-  const handleKick = async (userId: string) => {
-    if (!confirm("Bạn có chắc muốn mời thành viên này ra khỏi sự kiện?")) return;
+  const handleKick = async (targetUserId: string) => {
+    if (!confirm("Bạn có chắc muốn mời thành viên này ra khỏi sự kiện?")) return
     
-    setIsLoading(userId);
+    setLoadingId(targetUserId)
     try {
-      const res = await fetch(`/api/events/${eventId}/members/manage`, {
+      // Gọi API Delete Member
+      await apiClient(`/events/${eventId}/members`, {
         method: "DELETE",
-        body: JSON.stringify({ userId }),
-      });
-
-      if (!res.ok) throw new Error();
-
-      toast.success("Đã xóa thành viên");
-      onMemberUpdated?.();
-    } catch (error) {
-      toast.error("Lỗi khi xóa thành viên");
+        body: JSON.stringify({ userId: targetUserId }) // Truyền body để biết xóa ai
+      })
+      toast({ title: "Thành công", description: "Đã mời thành viên ra khỏi sự kiện" })
+      onMemberUpdated?.()
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Lỗi", description: error.message || "Thao tác thất bại" })
     } finally {
-      setIsLoading(null);
+      setLoadingId(null)
     }
-  };
+  }
 
-  const canManage = currentUserRole === "ORGANIZER";
+  // Logic kiểm tra quyền quản lý
+  const canManage = (targetMember: Member) => {
+    if (currentUserRole === 'HOST') return targetMember.role !== 'HOST';
+    if (currentUserRole === 'MODERATOR') return targetMember.role === 'PARTICIPANT';
+    return false;
+  }
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          <CardTitle>Thành viên ({members.length})</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Chưa có thành viên nào</p>
-          ) : (
-            members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                <div className="flex-1 min-w-0 mr-2">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="font-medium truncate">{member.user.display_name}</p>
+      <CardContent className="p-6">
+        <h3 className="font-semibold mb-4">Thành viên ({members.length})</h3>
+        <div className="space-y-4">
+          {members.map((member) => (
+            <div key={member.userId} className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={member.user.avatarUrl || ""} />
+                  <AvatarFallback>{member.user.username?.[0]?.toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm">{member.user.fullName || member.user.username}</p>
                     <RoleBadge role={member.role} />
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">{member.user.email}</p>
+                  <p className="text-xs text-muted-foreground">{member.user.email}</p>
                 </div>
-                
-                {/* Chỉ hiện nút thao tác nếu là Organizer và không phải chính mình */}
-                {canManage && member.user_id !== currentUserId ? (
-                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isLoading === member.user_id}>
-                        {isLoading === member.user_id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <MoreHorizontal className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {member.role !== 'MODERATOR' && (
-                        <DropdownMenuItem onClick={() => handleRoleUpdate(member.user_id, 'MODERATOR')}>
-                          <ShieldPlus className="mr-2 h-4 w-4 text-blue-600" /> Thăng làm Điều phối
-                        </DropdownMenuItem>
-                      )}
-                      {member.role === 'MODERATOR' && (
-                        <DropdownMenuItem onClick={() => handleRoleUpdate(member.user_id, 'PARTICIPANT')}>
-                          <ShieldMinus className="mr-2 h-4 w-4" /> Giáng xuống Thành viên
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleKick(member.user_id)}>
-                        <UserX className="mr-2 h-4 w-4" /> Mời ra khỏi sự kiện
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  /* Nếu không quản lý được thì hiển thị Badge Role dạng text nếu cần */
-                  <div className="hidden sm:block">
-                     {/* RoleBadge đã hiển thị ở tên rồi, chỗ này có thể để trống hoặc hiển thị ngày tham gia */}
-                  </div>
-                )}
               </div>
-            ))
-          )}
+
+              {/* Menu điều khiển */}
+              {canManage(member) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={loadingId === member.userId}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {member.role !== 'MODERATOR' && (
+                      <DropdownMenuItem onClick={() => handleRoleUpdate(member.userId, 'MODERATOR')}>
+                        <ShieldPlus className="mr-2 h-4 w-4 text-blue-600" /> Thăng làm Điều phối
+                      </DropdownMenuItem>
+                    )}
+                    {member.role === 'MODERATOR' && (
+                      <DropdownMenuItem onClick={() => handleRoleUpdate(member.userId, 'PARTICIPANT')}>
+                        <ShieldMinus className="mr-2 h-4 w-4" /> Giáng xuống Thành viên
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem 
+                      className="text-destructive focus:text-destructive" 
+                      onClick={() => handleKick(member.userId)}
+                    >
+                      <UserX className="mr-2 h-4 w-4" /> Mời ra khỏi sự kiện
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>

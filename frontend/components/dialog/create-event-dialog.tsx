@@ -1,18 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast" // Chú ý path import toast của bạn
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { apiClient } from "@/lib/api-client"
 import { Plus } from "lucide-react"
 
 export function CreateEventDialog({
@@ -24,50 +24,51 @@ export function CreateEventDialog({
   const [loading, setLoading] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [startTime, setStartTime] = useState("") // datetime-local
-  const [endTime, setEndTime] = useState("") // datetime-local
-  const toast = useToast()
+  const [startTime, setStartTime] = useState("") 
+  const [endTime, setEndTime] = useState("") 
+  const { toast } = useToast()
 
   const handleCreate = async () => {
     if (!title.trim()) return
 
     setLoading(true)
     try {
-      // Validate date range if provided
       if (startTime && endTime) {
         const s = new Date(startTime);
         const e = new Date(endTime);
         if (s > e) {
-          toast.error({ title: "Khoảng thời gian không hợp lệ", description: "Bắt đầu phải trước hoặc bằng kết thúc" })
-          setLoading(false)
-          return
+          toast({ variant: "destructive", title: "Lỗi", description: "Thời gian kết thúc phải sau thời gian bắt đầu" });
+          setLoading(false);
+          return;
         }
       }
 
-      const payload: any = { title: title.trim(), description: description || undefined }
-      if (startTime) payload.start_time = new Date(startTime).toISOString()
-      if (endTime) payload.end_time = new Date(endTime).toISOString()
-
-      const res = await fetch("/api/events", {
+      // Gọi API Backend
+      const newEvent = await apiClient("/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          title,
+          description,
+          startTime: startTime ? new Date(startTime).toISOString() : null,
+          endTime: endTime ? new Date(endTime).toISOString() : null,
+        }),
       })
 
-      const data = await res.json()
-      if (res.ok) {
-        onEventCreated(data)
-        setTitle("")
-        setDescription("")
-        setStartTime("")
-        setEndTime("")
-        setOpen(false)
-        toast.success({ title: "Tạo sự kiện thành công" })
-      } else {
-        toast.error({ title: "Tạo sự kiện thất bại", description: data?.error ?? "Vui lòng thử lại" })
-      }
-    } catch (error) {
-      toast.error({ title: "Tạo sự kiện thất bại", description: (error as Error)?.message })
+      toast({ title: "Thành công", description: "Tạo sự kiện thành công" })
+      onEventCreated(newEvent)
+      setOpen(false)
+      
+      // Reset form
+      setTitle("")
+      setDescription("")
+      setStartTime("")
+      setEndTime("")
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Lỗi", 
+        description: error.message || "Không thể tạo sự kiện" 
+      })
     } finally {
       setLoading(false)
     }
@@ -77,63 +78,51 @@ export function CreateEventDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Tạo sự kiện mới
+          <Plus className="mr-2 h-4 w-4" /> Sự kiện mới
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Tạo sự kiện mới</DialogTitle>
-          <DialogDescription>Tạo một sự kiện để bắt đầu nhận câu hỏi từ người tham gia</DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">Thời gian bắt đầu</label>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <label className="text-sm font-medium">Tên sự kiện</label>
+            <Input
+              placeholder="vd: Hội thảo AI"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium">Mô tả</label>
+            <Textarea
+              placeholder="Mô tả ngắn gọn..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Bắt đầu</label>
               <Input
                 type="datetime-local"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="mt-1"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium">Thời gian kết thúc</label>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Kết thúc</label>
               <Input
                 type="datetime-local"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="mt-1"
               />
             </div>
           </div>
-          <div>
-            <label className="text-sm font-medium">Tên sự kiện</label>
-            <Input
-              placeholder="vd: Hội thảo về AI"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Mô tả</label>
-            <Textarea
-              placeholder="Mô tả chi tiết về sự kiện..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 resize-none"
-              rows={4}
-            />
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-              Huỷ
-            </Button>
-            <Button onClick={handleCreate} disabled={loading || !title.trim()}>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>Hủy</Button>
+            <Button onClick={handleCreate} disabled={loading || !title}>
               {loading ? "Đang tạo..." : "Tạo sự kiện"}
             </Button>
           </div>

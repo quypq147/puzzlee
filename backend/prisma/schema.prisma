@@ -41,6 +41,8 @@ model User {
   passwordHash  String    @map("password_hash") // Lưu mật khẩu đã mã hóa (bcrypt/argon2)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  resetToken        String?   @map("reset_token")
+  resetTokenExpiry  DateTime? @map("reset_token_expiry")
 
   // Quan hệ 1-1 với Profile
   profile       Profile?

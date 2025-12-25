@@ -4,27 +4,29 @@ import { useEffect, useState, useCallback } from "react"
 import { QuestionCard } from "./question-card"
 import { Button } from "@/components/ui/button"
 import { Loader2, Bell } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { apiClient } from "@/lib/api-client"
+import { useEventRealtime } from "@/hooks/use-event-realtime"
+import { Question } from "@/types/custom"
 
 interface RealtimeQuestionsListProps {
   eventId: string
+  hostId?: string // Để check quyền nếu cần
 }
 
-export function RealtimeQuestionsList({ eventId }: RealtimeQuestionsListProps) {
-  const supabase = createClient()
-  const [questions, setQuestions] = useState<any[]>([])
+export function RealtimeQuestionsList({ eventId, hostId }: RealtimeQuestionsListProps) {
+  const [questions, setQuestions] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<"newest" | "popular">("newest")
-  const [newQuestionsCount, setNewQuestionsCount] = useState(0)
+  const [newQuestionsQueue, setNewQuestionsQueue] = useState<Question[]>([])
 
+  // Hàm tải danh sách câu hỏi ban đầu
   const loadQuestions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/questions?event_id=${eventId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setQuestions(data)
-        setNewQuestionsCount(0)
-      }
+      setLoading(true)
+      // Gọi API Node.js: GET /api/questions?eventId=...
+      const data = await apiClient<Question[]>(`/questions?eventId=${eventId}`)
+      setQuestions(data || [])
+      setNewQuestionsQueue([]) // Reset hàng đợi khi reload
     } catch (error) {
       console.error("Failed to load questions:", error)
     } finally {
@@ -34,71 +36,41 @@ export function RealtimeQuestionsList({ eventId }: RealtimeQuestionsListProps) {
 
   useEffect(() => {
     loadQuestions()
+  }, [loadQuestions])
 
-    // Subscribe to realtime updates
-    const channel = supabase
-      .channel(`questions:event_id=eq.${eventId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "questions",
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          console.log("[v0] New question received:", payload.new)
-          setNewQuestionsCount((c) => c + 1)
-          // Auto-refresh after a short delay
-          setTimeout(() => loadQuestions(), 500)
-        },
+  // Tích hợp Real-time (Socket.io)
+  useEventRealtime({
+    eventId,
+    onNewQuestion: (newQ) => {
+      // Khi có câu hỏi mới, đưa vào hàng đợi thông báo (tránh nhảy layout đột ngột)
+      setNewQuestionsQueue((prev) => [newQ, ...prev])
+    },
+    onUpdateVote: (updatedQ) => {
+      // Cập nhật vote ngay lập tức
+      setQuestions((prev) => 
+        prev.map((q) => (q.id === updatedQ.id ? { ...q, score: updatedQ.score } : q))
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "questions",
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          console.log("[v0] Question updated:", payload.new)
-          setQuestions((prev) => prev.map((q) => (q.id === payload.new.id ? payload.new : q)))
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "votes",
-        },
-        (payload) => {
-          console.log("[v0] Vote updated:", payload.new)
-          // Refresh to update vote counts
-          loadQuestions()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
     }
-  }, [eventId, supabase, loadQuestions])
+  })
+
+  // Hàm merge câu hỏi mới vào danh sách chính
+  const handleLoadNewQuestions = () => {
+    setQuestions((prev) => [...newQuestionsQueue, ...prev])
+    setNewQuestionsQueue([])
+  }
 
   const sortedQuestions = [...questions].sort((a, b) => {
     if (sortBy === "popular") {
-      return b.vote_count - a.vote_count
+      // Ưu tiên score cao, nếu bằng thì cái nào mới hơn lên trên
+      return (b.score || 0) - (a.score || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     }
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    // Mới nhất
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
-
-  const handleVoteChange = (questionId: string, newVotes: number) => {
-    setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, vote_count: newVotes } : q)))
-  }
 
   return (
     <div className="space-y-4">
+      {/* Header & Filter */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-2">
           <Button variant={sortBy === "newest" ? "default" : "outline"} onClick={() => setSortBy("newest")} size="sm">
@@ -109,14 +81,15 @@ export function RealtimeQuestionsList({ eventId }: RealtimeQuestionsListProps) {
           </Button>
         </div>
 
-        {newQuestionsCount > 0 && (
-          <Button size="sm" variant="outline" onClick={() => loadQuestions()} className="gap-2">
+        {newQuestionsQueue.length > 0 && (
+          <Button size="sm" variant="outline" onClick={handleLoadNewQuestions} className="gap-2 animate-pulse border-primary text-primary">
             <Bell className="h-4 w-4" />
-            Có {newQuestionsCount} câu hỏi mới
+            Có {newQuestionsQueue.length} câu hỏi mới
           </Button>
         )}
       </div>
 
+      {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -126,9 +99,13 @@ export function RealtimeQuestionsList({ eventId }: RealtimeQuestionsListProps) {
           <p className="text-muted-foreground">Chưa có câu hỏi nào. Hãy đặt câu hỏi đầu tiên!</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {sortedQuestions.map((question) => (
-            <QuestionCard key={question.id} question={question} eventId={eventId} onVoteChange={handleVoteChange} />
+        <div className="space-y-4">
+          {sortedQuestions.map((q) => (
+            <QuestionCard 
+              key={q.id} 
+              question={q} 
+              // Truyền thêm prop nếu cần thiết để xử lý logic vote/delete trong Card
+            />
           ))}
         </div>
       )}

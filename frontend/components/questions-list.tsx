@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import { QuestionCard } from "./question-card"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
 interface QuestionsListProps {
   eventId: string
   refreshTrigger?: number
-  type?: "qa" | "poll" | "quiz"
+  type?: "QA" | "POLL" | "QUIZ" // Khớp với enum backend
 }
 
 export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListProps) {
@@ -20,11 +21,9 @@ export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListPr
     setLoading(true)
     try {
       const typeQuery = type ? `&type=${type}` : ""
-      const res = await fetch(`/api/questions?event_id=${eventId}${typeQuery}`)
-      if (res.ok) {
-        const data = await res.json()
-        setQuestions(data)
-      }
+      // Dùng apiClient tự động gắn base URL và token
+      const data = await apiClient<any[]>(`/questions?eventId=${eventId}${typeQuery}`)
+      setQuestions(data || [])
     } catch (error) {
       console.error("Failed to load questions:", error)
     } finally {
@@ -34,18 +33,14 @@ export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListPr
 
   useEffect(() => {
     loadQuestions()
-  }, [eventId, refreshTrigger])
+  }, [eventId, refreshTrigger, type])
 
   const sortedQuestions = [...questions].sort((a, b) => {
     if (sortBy === "popular") {
-      return b.vote_count - a.vote_count
+      return (b.score || 0) - (a.score || 0)
     }
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
-
-  const handleVoteChange = (questionId: string, newVotes: number) => {
-    setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, vote_count: newVotes } : q)))
-  }
 
   return (
     <div className="space-y-4">
@@ -64,12 +59,12 @@ export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListPr
         </div>
       ) : sortedQuestions.length === 0 ? (
         <div className="rounded-lg border border-dashed py-8 text-center">
-          <p className="text-muted-foreground">Chưa có câu hỏi nào. Hãy đặt câu hỏi đầu tiên!</p>
+          <p className="text-muted-foreground">Chưa có dữ liệu.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {sortedQuestions.map((question) => (
-            <QuestionCard key={question.id} question={question} eventId={eventId} onVoteChange={handleVoteChange} />
+        <div className="space-y-4">
+          {sortedQuestions.map((q) => (
+            <QuestionCard key={q.id} question={q} />
           ))}
         </div>
       )}

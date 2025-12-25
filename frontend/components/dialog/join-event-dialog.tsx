@@ -6,46 +6,46 @@ import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription
 } from "@/components/ui/dialog"
-import { LogIn } from "lucide-react"
+import { LogIn, Loader2 } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
 
-export function JoinEventDialog({
-  onEventJoined,
-}: {
-  onEventJoined: (event: any) => void
-}) {
+export function JoinEventDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [code, setCode] = useState("")
-  const [error, setError] = useState("")
+  const router = useRouter()
+  const { toast } = useToast()
 
   const handleJoin = async () => {
     if (!code.trim()) return
 
     setLoading(true)
-    setError("")
     try {
-      const res = await fetch("/api/join", {
+      // Gọi API Join Event
+      // Endpoint này cần được xử lý ở backend: Nhận code -> Tìm Event -> Tạo EventMember -> Trả về Event
+      const event = await apiClient<any>("/events/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_code: code }),
+        body: JSON.stringify({ code: code.trim() }),
       })
 
-      const data = await res.json()
-      if (res.ok) {
-        onEventJoined(data.event)
-        setCode("")
-        setOpen(false)
-      } else {
-        setError(data.error || "Không thể tham gia sự kiện")
-      }
-    } catch (error) {
-      setError("Lỗi khi tham gia sự kiện")
-      console.error("Failed to join event:", error)
+      toast({ title: "Đã tham gia", description: `Chào mừng bạn đến với ${event.title}` })
+      setOpen(false)
+      // Chuyển hướng đến trang sự kiện
+      router.push(`/dashboard/events/${event.code}`)
+      
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Lỗi", 
+        description: error.message || "Không tìm thấy sự kiện hoặc lỗi hệ thống" 
+      })
     } finally {
       setLoading(false)
     }
@@ -56,34 +56,30 @@ export function JoinEventDialog({
       <DialogTrigger asChild>
         <Button variant="outline">
           <LogIn className="mr-2 h-4 w-4" />
-          Tham gia sự kiện
+          Tham gia bằng mã
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Tham gia sự kiện</DialogTitle>
-          <DialogDescription>Nhập mã sự kiện để tham gia</DialogDescription>
+          <DialogDescription>Nhập mã sự kiện (Code) được cung cấp bởi Host</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Mã sự kiện</label>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
             <Input
-              placeholder="vd: ABC123"
+              placeholder="VD: EVENT-123"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="mt-1 font-mono text-center text-lg tracking-widest"
+              onChange={(e) => setCode(e.target.value)}
+              className="text-center text-lg tracking-widest uppercase font-mono"
             />
           </div>
 
-          {error && <div className="rounded bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-              Huỷ
-            </Button>
-            <Button onClick={handleJoin} disabled={loading || !code.trim()}>
-              {loading ? "Đang tham gia..." : "Tham gia"}
+          <div className="flex justify-end gap-2">
+             <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>Đóng</Button>
+            <Button onClick={handleJoin} disabled={loading || !code} className="w-full sm:w-auto">
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Tham gia ngay
             </Button>
           </div>
         </div>
