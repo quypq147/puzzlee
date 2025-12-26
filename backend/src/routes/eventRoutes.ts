@@ -1,22 +1,13 @@
-import { Router } from "express";
-import { authenticateToken } from "../middleware/auth";
-import { 
-  createEvent, 
-  getMyEvents, 
-  getEventByCode, 
-  joinEvent, 
-  getEventById 
-} from "../controllers/eventController";
+import { Router } from 'express';
+import { createEvent, getEventsByOrg, joinEventByCode } from '../controllers/eventController';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-// Các routes cần đăng nhập
-router.post("/", authenticateToken, createEvent);
-router.get("/my-events", authenticateToken, getMyEvents);
-router.post("/join", authenticateToken, joinEvent);
-router.get("/:id", authenticateToken, getEventById);
+router.post('/join', authenticateToken, joinEventByCode); // Join bằng code
 
-// Route public (nếu muốn check code mà chưa cần login, hoặc tùy logic app bạn)
-router.get("/code/:code", getEventByCode);
+// Routes quản lý (Cần login)
+router.post('/', authenticateToken, createEvent);
+router.get('/org/:orgId', authenticateToken, getEventsByOrg);
 
 export default router;

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
@@ -7,219 +7,250 @@ datasource db {
   provider = "postgresql"
 }
 
-// --- ENUMS ---
-enum UserRole {
-  USER
-  ADMIN
+// ================= ENUMS =================
+
+enum SystemRole {
+  ADMIN // Admin của toàn bộ hệ thống phần mềm (Dev/Owner)
+  USER  // Người dùng bình thường
+}
+
+enum OrganizationRole {
+  OWNER  // Người tạo tổ chức (có quyền xoá, thanh toán)
+  ADMIN  // Quản lý tổ chức (thêm/sửa event, mời người)
+  MEMBER // Thành viên (chỉ xem hoặc thao tác hạn chế)
 }
 
 enum EventRole {
-  PARTICIPANT
-  MODERATOR
-  HOST
+  HOST        // Người chủ trì sự kiện (trong context 1 event cụ thể)
+  MODERATOR   // Trợ giảng/Duyệt câu hỏi
+  PARTICIPANT // Người tham gia
 }
 
+// Các enum khác giữ nguyên
 enum QuestionStatus {
-  VISIBLE
-  HIDDEN
-  ANSWERED
+  PENDING   // Chờ duyệt
+  APPROVED  // Đã hiện
+  REJECTED  // Bị từ chối
+  HIDDEN    // Đã ẩn
 }
 
 enum QuestionType {
-  QA
-  POLL
-  QUIZ
+  QA      // Câu hỏi thường
+  POLL    // Bình chọn trắc nghiệm
+  QUIZ    // Câu hỏi đúng sai (nếu cần mở rộng sau này)
 }
 
-// --- MODELS ---
+enum VoteType {
+  UPVOTE
+  DOWNVOTE
+}
 
-// 1. User: Thay thế cho auth.users của Supabase [MỚI]
-// Bạn cần bảng này để lưu email/password vì không còn dùng Supabase Auth
+
+// ================= MODELS =================
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  avatarUrl   String?
+
+  members     OrganizationMember[]
+  events      Event[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+  joinedAt       DateTime         @default(now())
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String    @id @default(uuid())
   email         String    @unique
-  passwordHash  String    @map("password_hash") // Lưu mật khẩu đã mã hóa (bcrypt/argon2)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  username      String    @unique
+  passwordHash  String?
+  fullName      String?
+  avatarUrl     String?
+  systemRole    SystemRole @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  resetToken        String?   @map("reset_token")
+  resetTokenExpiry  DateTime? @map("reset_token_expiry")
 
-  // Quan hệ 1-1 với Profile
-  profile       Profile?
+  organizations OrganizationMember[]
+  eventParticipations EventMember[]
+  questions     Question[]
+  answers       Answer[]
+  votes         Vote[]
+  comments      Comment[]
+  notifications Notification[]
 
   @@map("users")
 }
 
-// 2. Profile: Thông tin hiển thị người dùng [Cập nhật]
-model Profile {
-  id            String    @id @db.Uuid // Khóa ngoại trỏ tới User.id
-  username      String    @unique
-  fullName      String?   @map("full_name")
-  avatarUrl     String?   @map("avatar_url")
-  role          UserRole  @default(USER)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
-
-  // Quan hệ
-  user          User      @relation(fields: [id], references: [id], onDelete: Cascade)
-  
-  eventsCreated     Event[]         @relation("CreatedEvents")
-  questions         Question[]
-  answers           Answer[]
-  questionVotes     QuestionVote[]
-  eventMemberships  EventMember[]
-  notifications     Notification[]
-  pollResponses     PollResponse[]     // [MỚI]
-  questionResponses QuestionResponse[] // [MỚI]
-
-  @@map("profiles")
-}
-
-// 3. Event: Sự kiện/Lớp học
 model Event {
-  id          String    @id @default(uuid()) @db.Uuid
-  title       String
-  description String?
-  code        String?   @unique
-  createdBy   String    @map("created_by") @db.Uuid
-  isActive    Boolean   @default(true) @map("is_active")
-  startTime   DateTime? @map("start_time")
-  endTime     DateTime? @map("end_time")
-  settings    Json?     @default("{\"privacy\": \"public\", \"anonymous\": true, \"moderation\": false}")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  code           String   @unique
+  title          String
+  description    String?
+  startDate      DateTime @default(now())
+  isActive       Boolean  @default(true)
 
-  creator     Profile       @relation("CreatedEvents", fields: [createdBy], references: [id])
-  members     EventMember[]
-  questions   Question[]
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  creatorId      String?
+
+  members        EventMember[]
+  questions      Question[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([code])
+  @@index([organizationId])
   @@map("events")
 }
 
-// 4. EventMember: Thành viên tham gia
 model EventMember {
-  eventId   String    @map("event_id") @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
+  id        String    @id @default(uuid())
+  eventId   String
+  userId    String
   role      EventRole @default(PARTICIPANT)
-  joinedAt  DateTime  @default(now()) @map("joined_at")
+  joinedAt  DateTime  @default(now())
+  isBanned  Boolean   @default(false)
 
   event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([eventId, userId])
+  @@unique([eventId, userId])
   @@map("event_members")
 }
 
-// 5. Question: Câu hỏi
 model Question {
-  id          String         @id @default(uuid()) @db.Uuid
-  eventId     String         @map("event_id") @db.Uuid
-  authorId    String?        @map("author_id") @db.Uuid
-  content     String
-  isAnonymous Boolean        @default(false) @map("is_anonymous")
-  status      QuestionStatus @default(VISIBLE)
-  isPinned    Boolean        @default(false) @map("is_pinned")
-  isAnswered  Boolean        @default(false) @map("is_answered")
-  score       Int            @default(0)
-  type        QuestionType   @default(QA)
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at")
+  id           String         @id @default(uuid())
+  content      String
+  isAnonymous  Boolean        @default(false)
+  isPinned     Boolean        @default(false)
+  isAnswered   Boolean        @default(false)
+  status       QuestionStatus @default(PENDING) // Mặc định chờ duyệt nếu bật chế độ duyệt
+  type         QuestionType   @default(QA)
+  
+  upvotes      Int            @default(0) // Cache số lượng vote để query nhanh (Denormalization có kiểm soát)
+  
+  eventId      String
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  author            Profile?           @relation(fields: [authorId], references: [id])
-  votes             QuestionVote[]
-  answers           Answer[]
-  options           QuestionOption[]   // [MỚI]
-  pollResponses     PollResponse[]     // [MỚI]
-  questionResponses QuestionResponse[] // [MỚI]
+  authorId     String?        // Nullable nếu user ẩn danh hoàn toàn (tuỳ logic, nhưng nên lưu ID để ban nếu spam)
+  author       User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
+  // Quan hệ
+  answers      Answer[]
+  votes        Vote[]
+  pollOptions  PollOption[]   // Nếu là dạng POLL
+  comments     Comment[]
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([eventId, status]) // Query phổ biến: Lấy tất cả câu hỏi đã duyệt của Event X
   @@map("questions")
 }
 
-// 6. QuestionOption: Các lựa chọn cho Poll/Quiz [MỚI]
-model QuestionOption {
-  id                String             @id @default(uuid()) @db.Uuid
-  questionId        String             @map("question_id") @db.Uuid
-  content           String
-  isCorrect         Boolean            @default(false) @map("is_correct")
-  orderIndex        Int                @default(0) @map("order_index")
-  createdAt         DateTime           @default(now()) @map("created_at")
+// Dùng cho trường hợp câu hỏi dạng Poll (Trắc nghiệm)
+model PollOption {
+  id          String   @id @default(uuid())
+  content     String
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  votes       PollVote[]
 
-  question          Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  pollResponses     PollResponse[]
-  questionResponses QuestionResponse[]
-
-  @@map("question_options")
+  @@map("poll_options")
 }
 
-// 7. QuestionVote: Bình chọn câu hỏi (Upvote)
-model QuestionVote {
-  questionId String   @map("question_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  value      Int
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user       Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([questionId, userId])
-  @@map("question_votes")
+// Lưu vote cho Poll
+model PollVote {
+  id           String     @id @default(uuid())
+  optionId     String
+  userId       String
+  
+  option       PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  // Không cần relation User nếu không muốn track kỹ, nhưng nên có để tránh vote trùng
+  
+  @@unique([optionId, userId]) // Mỗi người chỉ chọn 1 option (hoặc bỏ unique nếu cho chọn nhiều)
+  @@map("poll_votes")
 }
 
-// 8. Answer: Câu trả lời dạng text (cho QA)
 model Answer {
-  id         String   @id @default(uuid()) @db.Uuid
-  questionId String   @map("question_id") @db.Uuid
-  authorId   String?  @map("author_id") @db.Uuid
+  id         String   @id @default(uuid())
   content    String
-  createdAt  DateTime @default(now()) @map("created_at")
+  isAccepted Boolean  @default(false) // Câu trả lời được ghim/chấp nhận bởi Host
 
+  questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  author     Profile? @relation(fields: [authorId], references: [id])
+
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("answers")
 }
 
-// 9. PollResponse: Câu trả lời cho Poll [MỚI]
-model PollResponse {
-  id         String   @id @default(uuid()) @db.Uuid
-  questionId String   @map("question_id") @db.Uuid
-  optionId   String   @map("option_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at")
+// Bảng Vote chung cho câu hỏi (Upvote/Downvote)
+model Vote {
+  id         String   @id @default(uuid())
+  type       VoteType
+  
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  option     QuestionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user       Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("poll_responses")
+  @@unique([questionId, userId]) // Một người chỉ vote 1 lần cho 1 câu hỏi
+  @@map("votes")
 }
 
-// 10. QuestionResponse: Câu trả lời cho Quiz (Trắc nghiệm) [MỚI]
-model QuestionResponse {
-  id         String   @id @default(uuid()) @db.Uuid
-  questionId String   @map("question_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  optionId   String   @map("option_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at")
+// Bình luận (cho câu hỏi hoặc câu trả lời - ở đây gắn vào câu hỏi để đơn giản hoá)
+model Comment {
+  id         String   @id @default(uuid())
+  content    String
+  
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user       Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  option     QuestionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  @@map("question_responses")
+  createdAt  DateTime @default(now())
+  
+  @@map("comments")
 }
 
-// 11. Notification
 model Notification {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  type      String
-  data      Json?
-  isRead    Boolean  @default(false) @map("is_read")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  content   String
+  isRead    Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
 
   @@map("notifications")
 }
-
-

@@ -1,17 +1,15 @@
 'use client'
 
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/use-auth' // Sử dụng hook auth thay vì supabase
 
 export function LogoutButton() {
-  const router = useRouter()
+  const { logout } = useAuth()
 
-  const logout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
+  // Hàm logout trong useAuth đã bao gồm việc xóa token và redirect về login
+  const handleLogout = () => {
+    logout()
   }
 
-  return <Button onClick={logout}>Đăng Xuất</Button>
+  return <Button onClick={handleLogout}>Đăng Xuất</Button>
 }

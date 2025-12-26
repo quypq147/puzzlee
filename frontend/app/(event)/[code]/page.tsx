@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import RoomClient from "./room";
 import { Metadata } from "next";
 

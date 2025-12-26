@@ -1,68 +1,113 @@
-'use client'
+"use client"
 
-import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useState } from "react"
+import apiClient from "@/lib/api-client"
+import { useToast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
 
-export function UpdatePasswordForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+export function UpdatePasswordForm({ className, ...props }: React.ComponentPropsWithoutRef<"div">) {
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  // Token được gửi qua email dưới dạng query param: ?token=...
+  const token = searchParams.get("token")
+
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
-    setIsLoading(true)
-    setError(null)
+    
+    if (!token) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Mã xác thực không hợp lệ." })
+      return
+    }
 
+    if (password !== confirmPassword) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Mật khẩu nhập lại không khớp." })
+      return
+    }
+
+    setIsLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) throw error
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push('/protected')
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Có lỗi xảy ra, vui lòng thử lại.')
+      // Gọi API Backend: POST /api/auth/reset-password
+      await apiClient.post("/auth/reset-password", {
+        token,
+        password,
+      })
+
+      toast({ title: "Thành công", description: "Mật khẩu đã được cập nhật. Vui lòng đăng nhập lại." })
+      router.push("/login")
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Thất bại", 
+        description: error.message || "Không thể đặt lại mật khẩu. Token có thể đã hết hạn." 
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
+  if (!token) {
+     return (
+        <Card className="w-full max-w-md mx-auto">
+           <CardContent className="pt-6 text-center text-red-500">
+              Liên kết không hợp lệ hoặc thiếu mã xác thực.
+           </CardContent>
+        </Card>
+     )
+  }
+
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
+    <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Đặt lại mật khẩu</CardTitle>
-          <CardDescription>Vui lòng nhập mật khẩu mới của bạn bên dưới.</CardDescription>
+          <CardDescription>Nhập mật khẩu mới cho tài khoản của bạn.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleForgotPassword}>
+          <form onSubmit={handleResetPassword}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
                 <Label htmlFor="password">Mật khẩu mới</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Mật khẩu mới"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="******"
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              <div className="grid gap-2">
+                <Label htmlFor="confirmPassword">Nhập lại mật khẩu</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="******"
+                />
+              </div>
+
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Đang lưu...' : 'Lưu mật khẩu mới'}
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isLoading ? "Đang xử lý..." : "Lưu mật khẩu mới"}
               </Button>
             </div>
           </form>

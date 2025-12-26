@@ -1,29 +1,75 @@
-// frontend/lib/api-client.ts
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
-type FetchOptions = RequestInit & {
-  headers?: Record<string, string>;
+type RequestOptions = RequestInit & {
+  params?: Record<string, string>;
 };
 
-export async function apiClient<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
-  // Lấy token từ localStorage (được lưu lúc login)
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+// Hàm helper để giả lập axios response
+const handleResponse = async (res: Response) => {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw { response: { data, status: res.status } }; // Giả lập lỗi axios
+  }
+  return { data }; // Giả lập success axios
+};
 
-  const headers = {
+const getHeaders = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
   };
+};
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+export const apiClient = {
+  get: async (url: string, options: RequestOptions = {}) => {
+    const query = options.params ? `?${new URLSearchParams(options.params)}` : "";
+    const res = await fetch(`${BASE_URL}${url}${query}`, {
+      method: "GET",
+      headers: { ...getHeaders(), ...options.headers },
+      ...options,
+    });
+    return handleResponse(res);
+  },
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || "API Error");
-  }
+  post: async (url: string, body: any, options: RequestOptions = {}) => {
+    const res = await fetch(`${BASE_URL}${url}`, {
+      method: "POST",
+      headers: { ...getHeaders(), ...options.headers },
+      body: JSON.stringify(body),
+      ...options,
+    });
+    return handleResponse(res);
+  },
 
-  return response.json() as Promise<T>;
-}
+  put: async (url: string, body: any, options: RequestOptions = {}) => {
+    const res = await fetch(`${BASE_URL}${url}`, {
+      method: "PUT",
+      headers: { ...getHeaders(), ...options.headers },
+      body: JSON.stringify(body),
+      ...options,
+    });
+    return handleResponse(res);
+  },
+
+  patch: async (url: string, body: any, options: RequestOptions = {}) => {
+    const res = await fetch(`${BASE_URL}${url}`, {
+      method: "PATCH",
+      headers: { ...getHeaders(), ...options.headers },
+      body: JSON.stringify(body),
+      ...options,
+    });
+    return handleResponse(res);
+  },
+
+  delete: async (url: string, options: RequestOptions = {}) => {
+    const res = await fetch(`${BASE_URL}${url}`, {
+      method: "DELETE",
+      headers: { ...getHeaders(), ...options.headers },
+      ...options,
+    });
+    return handleResponse(res);
+  },
+};
+
+export default apiClient;

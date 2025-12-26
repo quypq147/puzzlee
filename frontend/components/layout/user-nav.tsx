@@ -12,32 +12,34 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, User } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth"; // [EDIT] Dùng useAuth
+// import { createClient } from "@/lib/supabase/client"; // [REMOVE]
+// import { useRouter } from "next/navigation"; // Không cần vì useAuth.logout đã handle redirect
 import { ProfileDialog } from "@/components/dialog/profile-dialog";
 import * as React from "react";
 import { Dialog } from "@/components/ui/dialog";
 
-function initials(nameOrEmail: string) {
-  const parts = nameOrEmail.trim().split(/\s+/);
-  const letters = parts.length > 1 ? parts.slice(0, 2) : [nameOrEmail];
-  return letters.map((p) => p[0]?.toUpperCase() ?? "").join("") || "U";
+function initials(name: string) {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function UserNav() {
-  const { user, profile } = useAuth();
-  const router = useRouter();
-  const supabase = createClient();
+  // [EDIT] Lấy user và hàm logout từ context
+  const { user, logout } = useAuth();
   const [openProfile, setOpenProfile] = React.useState(false);
 
-  const displayName = profile?.first_name || "Người dùng";
+  // [EDIT] Map dữ liệu từ UserProfile mới
+  const displayName = user?.fullName || user?.username || "Người dùng";
   const email = user?.email;
-  const avatarUrl = profile?.avatar_url || "/placeholder-user.jpg";
+  // const avatarUrl = user?.avatarUrl || "/placeholder-user.jpg"; 
+  // (Lưu ý: Schema backend bạn gửi có avatarUrl, nếu null thì fallback)
+  const avatarUrl = "/placeholder-user.jpg"; 
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+  const handleLogout = () => {
+    logout(); // [EDIT] Gọi hàm logout của Context (xóa token localStorage)
   };
 
   return (
@@ -71,12 +73,15 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {/* [EDIT] Gắn hàm handleLogout mới */}
         <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600 cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Đăng xuất</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
+      
       <Dialog open={openProfile} onOpenChange={setOpenProfile}>
+         {/* Lưu ý: ProfileDialog bên trong cũng cần check xem có gọi Supabase không */}
         {openProfile ? <ProfileDialog onClose={() => setOpenProfile(false)} /> : null}
       </Dialog>
     </DropdownMenu>

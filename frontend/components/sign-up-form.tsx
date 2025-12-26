@@ -12,50 +12,38 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+// [EDIT] Bỏ import supabase
+// import { api } from "@/lib/api"; 
+import { useAuth } from "@/hooks/use-auth"; // [EDIT] Dùng hook mới
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/use-toast"; // Thêm toast để thông báo
 
 export function SignUpForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
+  const { register } = useAuth(); // [EDIT] Lấy hàm register từ context
+  const { toast } = useToast();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
+  // Backend User model hiện tại chỉ cần username/fullName, ta gộp firstName/secondName
+  const [firstName, setFirstName] = useState(""); 
   const [secondName, setSecondName] = useState("");
   const [username, setUsername] = useState("");
-  const [isUsernameValid, setIsUsernameValid] = useState<boolean | null>(null);
-  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
-  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState("");
+  
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
   const validateUsernameFormat = (u: string) => /^[a-zA-Z0-9_\.\-]{3,32}$/.test(u);
-
-  const checkUsernameAvailability = async (u: string) => {
-    if (!u) {
-      setIsUsernameAvailable(null);
-      return;
-    }
-    setIsCheckingUsername(true);
-    const { data: existing, error: usernameError } = await api.get(`/api/profiles?username=${u}`);
-    if (usernameError) {
-      setIsUsernameAvailable(null);
-    } else {
-      setIsUsernameAvailable(!existing);
-    }
-    setIsCheckingUsername(false);
-  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
+    // Validate client-side cơ bản
     if (password !== repeatPassword) {
       setError("Mật khẩu không khớp");
       setIsLoading(false);
@@ -68,58 +56,28 @@ export function SignUpForm({
       return;
     }
 
-    // Check username uniqueness in profiles
-    if (username) {
-      const { data: existing, error: usernameError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("username", username)
-        .maybeSingle();
-      if (usernameError) {
-        setError("Không thể kiểm tra username, thử lại sau");
-        setIsLoading(false);
-        return;
-      }
-      if (existing) {
-        setError("Username đã tồn tại, vui lòng chọn tên khác");
-        setIsLoading(false);
-        return;
-      }
-    }
-
     try {
-      const { data: signUpData, error } = await supabase.auth.signUp({
+      // [EDIT] Gọi hàm register từ AuthContext (nó sẽ gọi API /api/auth/register)
+      // Gộp firstName và secondName thành fullName để khớp với schema backend
+      const fullName = `${firstName} ${secondName}`.trim();
+      
+      await register({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
-          data: {
-            first_name: firstName || null,
-            second_name: secondName || null,
-            username: username || null,
-            avatar_url: avatarUrl || null,
-            role: "user",
-          },
-        },
+        username,
+        fullName: fullName// Fallback nếu không nhập tên
       });
-      if (error) throw error;
-      if (signUpData?.user) {
-        await (supabase as any)
-          .from("profiles")
-          .upsert(
-            {
-              id: signUpData.user.id,
-              first_name: firstName || null,
-              second_name: secondName || null,
-              username: username || null,
-              avatar_url: avatarUrl || null,
-            },
-            { onConflict: "id" }
-          );
-      }
-      router.push("/sign-up-success");
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "Đã xảy ra lỗi");
+
+      toast({
+        title: "Đăng ký thành công",
+        description: "Vui lòng đăng nhập để tiếp tục.",
+      });
+      
+      // useAuth.register đã xử lý redirect sang /login
+      
+    } catch (error: any) {
+      // Error từ backend trả về (ví dụ: Email exist, Username exist)
+      setError(error.message || "Đăng ký thất bại");
     } finally {
       setIsLoading(false);
     }
@@ -130,7 +88,7 @@ export function SignUpForm({
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Đăng ký</CardTitle>
-          <CardDescription>Tạo tài khoản mới</CardDescription>
+          <CardDescription>Tạo tài khoản mới hệ thống Puzzlee</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp}>
@@ -140,109 +98,71 @@ export function SignUpForm({
                   <Label htmlFor="first-name">Tên đầu</Label>
                   <Input
                     id="first-name"
-                    type="text"
-                    placeholder="Nguyễn"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Nguyễn"
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="second-name">Tên cuối</Label>
                   <Input
                     id="second-name"
-                    type="text"
-                    placeholder="Văn A"
                     value={secondName}
                     onChange={(e) => setSecondName(e.target.value)}
+                    placeholder="Văn A"
                   />
                 </div>
               </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
-                  type="text"
-                  placeholder="nguyenvana"
                   value={username}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setUsername(v);
-                    const valid = validateUsernameFormat(v);
-                    setIsUsernameValid(v ? valid : null);
-                    setIsUsernameAvailable(null);
-                  }}
-                  onBlur={() => {
-                    if (username && validateUsernameFormat(username)) {
-                      checkUsernameAvailability(username);
-                    }
-                  }}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="nguyenvana"
+                  required
                 />
-                {username && (
-                  <p className="text-xs">
-                    {isCheckingUsername && (
-                      <span className="text-zinc-500">Đang kiểm tra username…</span>
-                    )}
-                    {!isCheckingUsername && isUsernameValid === false && (
-                      <span className="text-red-500">Username không hợp lệ.</span>
-                    )}
-                    {!isCheckingUsername && isUsernameValid && isUsernameAvailable === false && (
-                      <span className="text-red-500">Username đã tồn tại.</span>
-                    )}
-                    {!isCheckingUsername && isUsernameValid && isUsernameAvailable && (
-                      <span className="text-green-600">Username hợp lệ và khả dụng.</span>
-                    )}
-                  </p>
-                )}
               </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
-                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="m@example.com"
+                  required
                 />
               </div>
+
               <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Mật khẩu</Label>
-                </div>
+                <Label htmlFor="password">Mật khẩu</Label>
                 <Input
                   id="password"
                   type="password"
-                  required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
               </div>
+
               <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="repeat-password">Nhập lại mật khẩu</Label>
-                </div>
+                <Label htmlFor="repeat-password">Nhập lại mật khẩu</Label>
                 <Input
                   id="repeat-password"
                   type="password"
-                  required
                   value={repeatPassword}
                   onChange={(e) => setRepeatPassword(e.target.value)}
+                  required
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={
-                  isLoading ||
-                  (username
-                    ? isUsernameValid === false ||
-                      isCheckingUsername ||
-                      isUsernameAvailable === false
-                    : false)
-                }
-              >
-                {isLoading ? "Đang tạo tài khoản..." : "Đăng ký"}
+
+              {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Đang xử lý..." : "Đăng ký"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">
