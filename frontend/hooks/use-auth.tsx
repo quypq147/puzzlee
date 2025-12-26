@@ -8,108 +8,107 @@ import {
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-
-// Định nghĩa kiểu dữ liệu User dựa trên backend trả về
-export type UserProfile = {
-  id: string;
-  email: string;
-  username: string | null;
-  fullName: string | null;
-  avatarUrl: string | null;
-  role: string | null;
-};
+import apiClient from "@/lib/api-client"; // Đảm bảo bạn đã có file này
+import { User } from "@/types/custom";
 
 type AuthContextValue = {
-  user: UserProfile | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; username: string; fullName: string }) => Promise<void>;
+  user: User | null;
+  isLoading: boolean;
+  login: (data: { email: string; password: string }) => Promise<void>;
+  register: (data: { email: string; password: string; fullName: string }) => Promise<void>;
   logout: () => void;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
-  loading: true,
+  isLoading: true,
   login: async () => {},
   register: async () => {},
   logout: () => {},
+  refreshProfile: async () => {},
 });
 
-const API_URL = "http://localhost:4000/api/auth";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Hàm load user từ token khi mới vào trang
+  // 1. Khởi tạo: Check token & Load profile
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      fetch(`${API_URL}/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(async (res) => {
-          if (res.ok) {
-            const userData = await res.json();
-            setUser(userData);
-          } else {
-            // Token hết hạn hoặc không hợp lệ
-            localStorage.removeItem("token");
-            setUser(null);
-          }
-        })
-        .catch(() => setUser(null))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    const initAuth = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Gọi API lấy thông tin user hiện tại
+        const res = await apiClient.get("/users/profile");
+        setUser(res.data);
+      } catch (error) {
+        console.error("Failed to fetch profile", error);
+        // Token lỗi/hết hạn -> Xoá đi
+        localStorage.removeItem("token");
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Đăng nhập thất bại");
-
-    // Lưu token và set user
-    localStorage.setItem("token", data.token);
-    setUser(data.user);
-    router.push("/dashboard"); // Redirect sau khi login
+  // 2. Login
+  const login = async (payload: { email: string; password: string }) => {
+    try {
+      const res = await apiClient.post("/auth/login", payload);
+      const { token, user } = res.data;
+      
+      localStorage.setItem("token", token);
+      setUser(user);
+      
+      router.push("/dashboard");
+    } catch (error) {
+      throw error;
+    }
   };
 
-  const register = async (payload: { email: string; password: string; username: string; fullName: string }) => {
-    const res = await fetch(`${API_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "Đăng ký thất bại");
-    
-    // Đăng ký xong có thể tự động login hoặc bắt user login lại. 
-    // Ở đây ta chuyển hướng trang login
-    router.push("/login"); 
+  // 3. Register
+  const register = async (payload: { email: string; username: string; password: string; fullName: string }) => {
+    try {
+      await apiClient.post("/auth/register", payload);
+      // Đăng ký thành công -> Chuyển sang login
+      router.push("/login?registered=true");
+    } catch (error) {
+      throw error;
+    }
   };
 
+  // 4. Logout
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("lastOrgId"); // Xoá config Org cũ
     setUser(null);
     router.push("/login");
   };
 
+  // 5. Refresh Profile (Dùng khi update thông tin cá nhân)
+  const refreshProfile = async () => {
+    try {
+      const res = await apiClient.get("/users/profile");
+      setUser(res.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);

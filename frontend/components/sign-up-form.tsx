@@ -65,7 +65,7 @@ export function SignUpForm({
         email,
         password,
         username,
-        fullName: fullName || username // Fallback nếu không nhập tên
+        fullName: fullName// Fallback nếu không nhập tên
       });
 
       toast({

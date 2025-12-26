@@ -1,55 +1,73 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMyEvents } from "@/lib/api/event"; // API mới
-import { Event } from "@/types/custom"; // Type mới
-import { EventCard } from "@/components/event-card"; // Component hiển thị (giữ nguyên UI)
+import { useOrganization } from "@/contexts/organization-context";
+import { Event } from "@/types/custom";
+import apiClient from "@/lib/api-client";
+import { OrgSwitcher } from "@/components/org-switcher";
 import { CreateEventDialog } from "@/components/dialog/create-event-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EventCard } from "@/components/event-card"; // Giả sử bạn đã có component này
+import { Loader2 } from "lucide-react";
 
-export default function EventsPage() {
+export default function DashboardPage() {
+  const { currentOrganization, isLoading: isOrgLoading } = useOrganization();
   const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
-  const fetchEvents = async () => {
+  // Hàm load events
+  const loadEvents = async () => {
+    if (!currentOrganization) return;
+    setLoadingEvents(true);
     try {
-      const data = await getMyEvents();
-      setEvents(data);
+      // Gọi API lấy events theo Org ID
+      const res = await apiClient.get(`/events/org/${currentOrganization.id}`);
+      setEvents(res.data);
     } catch (error) {
-      console.error("Lỗi tải sự kiện", error);
+      console.error(error);
     } finally {
-      setLoading(false);
+      setLoadingEvents(false);
     }
   };
 
   useEffect(() => {
-    fetchEvents();
-  }, []);
+    loadEvents();
+  }, [currentOrganization]); // Chạy lại khi đổi Org
+
+  if (isOrgLoading) {
+    return <div className="flex h-[50vh] items-center justify-center"><Loader2 className="animate-spin" /></div>;
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Sự kiện của tôi</h2>
-        <CreateEventDialog onCreated={fetchEvents} />
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold tracking-tight">Tổng quan</h2>
+          <p className="text-muted-foreground">Quản lý sự kiện trong tổ chức của bạn.</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+            {/* Dropdown chuyển Org */}
+            <OrgSwitcher /> 
+            
+            {/* Nút tạo Event */}
+            <CreateEventDialog onEventCreated={loadEvents} />
+        </div>
       </div>
-
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[200px] w-full rounded-xl" />
-          ))}
-        </div>
-      ) : events.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          Bạn chưa tham gia sự kiện nào.
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {events.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
-      )}
+      
+      {/* Danh sách Event */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {events.map((event) => (
+          <EventCard key={event.id} event={event} />
+        ))}
+        
+        {events.length === 0 && !loadingEvents && (
+             <div className="col-span-full flex flex-col items-center justify-center py-16 border border-dashed rounded-lg bg-muted/50">
+                <p className="text-lg font-medium text-muted-foreground mb-2">Chưa có sự kiện nào</p>
+                <p className="text-sm text-muted-foreground mb-4">Hãy tạo sự kiện đầu tiên cho {currentOrganization?.name}</p>
+                <CreateEventDialog onEventCreated={loadEvents} />
+             </div>
+        )}
+      </div>
     </div>
   );
 }

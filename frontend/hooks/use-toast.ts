@@ -1,46 +1,28 @@
-"use client";
+"use client"
 
-import { toast as sonnerToast } from "sonner";
+import { toast as sonnerToast, ExternalToast } from "sonner"
 
-type POSITION = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type ToastType = "success" | "error" | "info" | "warning"
 
-export interface ToastData {
-  title: string;
-  description?: string;
-  duration?: number;
-  position?: POSITION;
+interface ToastProps {
+  title?: string
+  description?: string
+  variant?: "default" | "destructive" // Giữ tương thích với shadcn cũ nếu cần
 }
 
-type ToastType = "success" | "error" | "warning" | "info";
-
-/**
- * Hook mỏng quấn quanh sonner, để dùng trong UI Q&A
- */
+// Wrapper để tương thích với cách gọi toast({ title, description }) cũ
 export function useToast() {
-  const base = (type: ToastType, data: ToastData) => {
-    const { title, description, duration, position } = data;
-
-    return sonnerToast(title, {
+  function toast({ title, description, variant }: ToastProps) {
+    const options: ExternalToast = {
       description,
-      duration: duration ?? 3000,
-      position: mapPosition(position ?? "top-right"),
-      // icon sẽ lấy theo type do bạn đã config trong <Toaster icons={...} />
-      // variant & kiểu màu đã set bởi style trong sonner.tsx
-    });
-  };
+    }
 
-  return {
-    success: (data: ToastData) => base("success", data),
-    error: (data: ToastData) => base("error", data),
-    warning: (data: ToastData) => base("warning", data),
-    info: (data: ToastData) => base("info", data),
-    // nếu cần dùng sonnerToast thô:
-    raw: sonnerToast,
-  };
-}
+    if (variant === "destructive") {
+      sonnerToast.error(title, options)
+    } else {
+      sonnerToast.success(title, options)
+    }
+  }
 
-function mapPosition(pos: POSITION): import("sonner").ToasterProps["position"] {
-  // Sonner dùng: "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right"
-  // Bạn hiện chỉ cần 4 góc, nên map thẳng
-  return pos;
+  return { toast }
 }

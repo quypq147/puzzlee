@@ -4,8 +4,9 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/components/ui/use-toast"
-import { apiClient } from "@/lib/api-client" // Dùng trực tiếp hoặc qua lib wrapper
+import { useToast } from "@/hooks/use-toast"
+import {apiClient} from "@/lib/api-client"
+import { Loader2 } from "lucide-react"
 
 interface EditQuestionDialogProps {
   open: boolean
@@ -23,17 +24,20 @@ export function EditQuestionDialog({ open, onOpenChange, question, onSuccess }: 
     if (!content.trim()) return
     setLoading(true)
     try {
-      // Gọi API update question
-      await apiClient(`/questions/${question.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ content })
+      // PATCH /questions/:id
+      await apiClient.patch(`/questions/${question.id}`, { 
+        content 
       })
       
       toast({ title: "Thành công", description: "Đã cập nhật câu hỏi" })
       onSuccess?.(content)
       onOpenChange(false)
-    } catch (error) {
-      toast({ variant: "destructive", title: "Lỗi", description: "Không thể cập nhật câu hỏi" })
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Lỗi", 
+        description: error.response?.data?.message || "Không thể cập nhật câu hỏi" 
+      })
     } finally {
       setLoading(false)
     }
@@ -51,11 +55,15 @@ export function EditQuestionDialog({ open, onOpenChange, question, onSuccess }: 
             onChange={(e) => setContent(e.target.value)} 
             rows={4}
             className="resize-none"
+            placeholder="Nội dung câu hỏi..."
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>
-          <Button onClick={handleUpdate} disabled={loading}>Lưu</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>Hủy</Button>
+          <Button onClick={handleUpdate} disabled={loading || !content.trim()}>
+             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+             Lưu thay đổi
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

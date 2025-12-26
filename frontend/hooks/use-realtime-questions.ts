@@ -1,68 +1,66 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useCallback } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import { useEffect } from "react";
+import { socket } from "@/lib/socket"; // File cấu hình socket instance
+import { Question } from "@/types/custom";
 
-export function useRealtimeQuestions(eventId: string) {
-  const supabase = createClient()
-  const [channel, setChannel] = useState<RealtimeChannel | null>(null)
-
-  const subscribe = useCallback(() => {
-    const questionChannel = supabase
-      .channel(`questions:event_id=eq.${eventId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "questions",
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          console.log("[Realtime] Câu hỏi mới:", payload.new)
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "questions",
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          console.log("[Realtime] Câu hỏi cập nhật:", payload.new)
-        },
-      )
-      .subscribe()
-
-    setChannel(questionChannel)
-
-    return () => {
-      supabase.removeChannel(questionChannel)
-    }
-  }, [supabase, eventId])
-
-  useEffect(() => {
-    subscribe()
-  }, [subscribe])
-
-  return { channel }
+interface UseRealtimeQuestionsProps {
+  eventId: string;
+  onNewQuestion?: (question: Question) => void;
+  onUpdateQuestion?: (question: Question) => void;
+  onNewVote?: (data: { questionId: string; upvotes: number }) => void;
 }
 
-export function useRealtimeVotes() {
-  const supabase = createClient()
+export function useRealtimeQuestions({
+  eventId,
+  onNewQuestion,
+  onUpdateQuestion,
+  onNewVote,
+}: UseRealtimeQuestionsProps) {
+  
+  useEffect(() => {
+    if (!eventId) return;
 
-  return supabase.channel("votes").on(
-    "postgres_changes",
-    {
-      event: "*",
-      schema: "public",
-      table: "question_votes",
-    },
-    (payload) => {
-      console.log("[Realtime] Thay đổi vote:", payload)
-    },
-  )
+    // 1. Connect & Join Room
+    if (!socket.connected) {
+      socket.connect();
+    }
+    
+    // Gửi event join room để server biết đường gửi data về đúng chỗ
+    socket.emit("join-event", { eventId });
+    console.log(`[Socket] Joined event room: ${eventId}`);
+
+    // 2. Define Handlers
+    const handleNewQuestion = (question: Question) => {
+      console.log("[Socket] New question:", question);
+      onNewQuestion?.(question);
+    };
+
+    const handleUpdateQuestion = (question: Question) => {
+      console.log("[Socket] Question updated:", question);
+      onUpdateQuestion?.(question);
+    };
+
+    const handleVoteUpdate = (data: { questionId: string; upvotes: number }) => {
+      // console.log("[Socket] Vote updated:", data); 
+      onNewVote?.(data);
+    };
+
+    // 3. Listen to Events
+    socket.on("question:created", handleNewQuestion);
+    socket.on("question:updated", handleUpdateQuestion);
+    socket.on("vote:updated", handleVoteUpdate);
+
+    // 4. Cleanup
+    return () => {
+      socket.off("question:created", handleNewQuestion);
+      socket.off("question:updated", handleUpdateQuestion);
+      socket.off("vote:updated", handleVoteUpdate);
+      
+      // Rời phòng khi unmount component
+      socket.emit("leave-event", { eventId });
+    };
+  }, [eventId, onNewQuestion, onUpdateQuestion, onNewVote]);
+
+  return { isConnected: socket.connected };
 }

@@ -1,116 +1,89 @@
-import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { Request, Response } from 'express';
+import { prisma } from '../../lib/prisma'; // Đảm bảo đường dẫn đúng tới file prisma instance
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || "secret_key";
-
-// Đăng ký
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, username, fullName } = req.body;
+    const { email, password, fullName } = req.body;
 
-    // Kiểm tra email tồn tại
+    // 1. Check user exist
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return res.status(400).json({ message: "Email already exists" });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
 
-    // Kiểm tra username tồn tại
-    const existingProfile = await prisma.profile.findUnique({ where: { username } });
-    if (existingProfile) return res.status(400).json({ message: "Username already exists" });
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Transaction: Tạo User trước -> Tạo Profile sau
+    // 2. Transaction: Tạo User -> Tạo Org -> Add User làm Owner
     const result = await prisma.$transaction(async (tx) => {
+      // A. Tạo User
       const user = await tx.user.create({
         data: {
           email,
-          passwordHash,
-        },
-      });
-
-      const profile = await tx.profile.create({
-        data: {
-          id: user.id, // Link Profile với User ID
-          username,
+          passwordHash: hashedPassword,
           fullName,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}`,
         },
       });
 
-      return { user, profile };
+      // B. Tạo tên Organization mặc định
+      const orgName = `${fullName}'s Workspace`;
+      // Tạo slug đơn giản (cần hàm xử lý kỹ hơn trong thực tế)
+      const slug = fullName.toLowerCase().replace(/ /g, '-') + '-' + Math.floor(Math.random() * 1000);
+
+      // C. Tạo Organization và link User vào làm OWNER
+      const organization = await tx.organization.create({
+        data: {
+          name: orgName,
+          slug: slug,
+          members: {
+            create: {
+              userId: user.id,
+              role: 'OWNER',
+            },
+          },
+        },
+      });
+
+      return { user, organization };
     });
 
-    res.status(201).json({ message: "User created successfully", userId: result.user.id });
+    res.status(201).json({
+      message: 'User and Organization created successfully',
+      user: { id: result.user.id, email: result.user.email },
+      organization: result.organization,
+    });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-// Đăng nhập
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { profile: true },
-    });
-
-    if (!user || !user.profile) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Tạo JWT
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+    // Tạo Token
+    const token = jwt.sign(
+      { userId: user.id, role: user.systemRole },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: '7d' }
+    );
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.profile.username,
-        fullName: user.profile.fullName,
-        avatarUrl: user.profile.avatarUrl,
-        role: user.profile.role,
-      },
-    });
+    res.json({ token, user: { id: user.id, name: user.fullName, email: user.email } });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-// Lấy thông tin user hiện tại (Dựa vào Token)
-export const getMe = async (req: Request & { user?: any }, res: Response) => {
-  try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true },
-    });
-
-    if (!user || !user.profile) return res.status(404).json({ message: "User not found" });
-
-    res.json({
-      id: user.id,
-      email: user.email,
-      username: user.profile.username,
-      fullName: user.profile.fullName,
-      avatarUrl: user.profile.avatarUrl,
-      role: user.profile.role,
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };

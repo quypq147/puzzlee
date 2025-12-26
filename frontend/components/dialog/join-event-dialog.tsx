@@ -12,9 +12,9 @@ import {
   DialogDescription
 } from "@/components/ui/dialog"
 import { LogIn, Loader2 } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
+import {apiClient} from "@/lib/api-client"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 export function JoinEventDialog() {
   const [open, setOpen] = useState(false)
@@ -28,23 +28,25 @@ export function JoinEventDialog() {
 
     setLoading(true)
     try {
-      // Gọi API Join Event
-      // Endpoint này cần được xử lý ở backend: Nhận code -> Tìm Event -> Tạo EventMember -> Trả về Event
-      const event = await apiClient<any>("/events/join", {
-        method: "POST",
-        body: JSON.stringify({ code: code.trim() }),
-      })
+      // Gọi API Backend: POST /events/join
+      const res = await apiClient.post("/events/join", { 
+        code: code.trim().toUpperCase() // Code thường viết hoa
+      });
+      
+      const event = res.data.event; // Giả sử backend trả về { message, event }
 
       toast({ title: "Đã tham gia", description: `Chào mừng bạn đến với ${event.title}` })
       setOpen(false)
-      // Chuyển hướng đến trang sự kiện
-      router.push(`/dashboard/events/${event.code}`)
       
+      // Điều hướng đến trang sự kiện
+      // Chú ý: Route frontend của bạn có thể là /dashboard/events/[code] hoặc /event/[code]
+      router.push(`/dashboard/events/${event.code}`) 
+
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
         title: "Lỗi", 
-        description: error.message || "Không tìm thấy sự kiện hoặc lỗi hệ thống" 
+        description: error.response?.data?.message || "Mã sự kiện không hợp lệ" 
       })
     } finally {
       setLoading(false)
@@ -68,10 +70,11 @@ export function JoinEventDialog() {
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Input
-              placeholder="VD: EVENT-123"
+              placeholder="VD: X8K9L"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               className="text-center text-lg tracking-widest uppercase font-mono"
+              maxLength={10}
             />
           </div>
 
@@ -79,7 +82,7 @@ export function JoinEventDialog() {
              <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>Đóng</Button>
             <Button onClick={handleJoin} disabled={loading || !code} className="w-full sm:w-auto">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Tham gia ngay
+              Tham gia
             </Button>
           </div>
         </div>
