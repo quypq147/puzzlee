@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { joinEvent } from "@/lib/api/event"; // API đã viết ở bước trước
+import {questionApi} from "@/lib/api/questions"// API mới
 
 export default function JoinPage() {
   const [code, setCode] = useState("");
@@ -21,7 +21,7 @@ export default function JoinPage() {
     setLoading(true);
     try {
       // Gọi API tham gia (Check code + Add member)
-      const res = await joinEvent(code.toUpperCase());
+      const res = await questionApi.join(code.toUpperCase());
       toast({ title: "Thành công", description: "Đang vào phòng..." });
       
       // Chuyển hướng tới trang Room

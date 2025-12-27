@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useEventRealtime } from "@/hooks/use-event-realtime"; // Hook socket đã tạo
-import { getQuestions, createQuestion } from "@/lib/api/questions"; // API mới
+import {questionApi} from "@/lib/api/questions"// API mới
 import { Question } from "@/types/custom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuestionCard } from "@/components/question-card"; // Component UI cũ
 import { useToast } from "@/components/ui/use-toast";
-import { getSocket } from "@/lib/socket";
+import { socket } from "@/lib/socket";
 
 interface RoomProps {
   eventId: string; // ID của sự kiện (lấy từ API getEventByCode ở page cha)
@@ -24,7 +24,7 @@ export default function EventRoom({ eventId, eventCode }: RoomProps) {
 
   // 1. Tải dữ liệu ban đầu
   useEffect(() => {
-    getQuestions(eventId).then(setQuestions).catch(console.error);
+    questionApi.getByEvent(eventId).then(res => setQuestions(res.data)).catch(console.error);
   }, [eventId]);
 
   // 2. Kích hoạt Socket Realtime
@@ -45,8 +45,8 @@ export default function EventRoom({ eventId, eventCode }: RoomProps) {
     if (!newContent.trim()) return;
     
     // Emit sự kiện socket lên server
-    const socket = getSocket();
-    socket.emit("create-question", {
+    const socketInstance = socket;
+    socketInstance.emit("create-question", {
       eventId,
       userId: user?.id,
       content: newContent,

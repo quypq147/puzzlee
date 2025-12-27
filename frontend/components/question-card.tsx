@@ -8,7 +8,6 @@ import { VoteButton } from "@/components/vote-button"
 import { MessageSquare, Pin, User, MoreVertical, Pencil, Trash } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { vi } from "date-fns/locale"
-import { QuestionWithDetails } from "@/types/custom" 
 import { useAuth } from "@/hooks/use-auth"
 import {
   DropdownMenu,
@@ -17,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { EditQuestionDialog } from "@/components/dialog/edit-question-dialog"
-import { deleteQuestion } from "@/lib/api/questions"
+import {questionApi} from "@/lib/api/questions"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -29,10 +28,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { RoleBadge } from "@/components/ui/role-badge" // [NEW IMPORT]
+import { RoleBadge } from "@/components/ui/role-badge"
+import { Question } from "@/types/custom"
 
 interface QuestionCardProps {
-  question: QuestionWithDetails
+  question: Question
   authorRole?: string | null // [NEW PROP]
   onVoteChange?: (id: string, value: number) => void
   onDelete?: (id: string) => void
