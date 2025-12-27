@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOrganization } from "@/contexts/organization-context";
 import { Event } from "@/types/custom";
-import apiClient from "@/lib/api-client";
+import {apiClient} from "@/lib/api-client";
 import { OrgSwitcher } from "@/components/org-switcher";
 import { CreateEventDialog } from "@/components/dialog/create-event-dialog";
 import { EventCard } from "@/components/event-card"; // Giả sử bạn đã có component này

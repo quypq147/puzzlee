@@ -16,7 +16,7 @@ type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
   login: (data: { email: string; password: string }) => Promise<void>;
-  register: (data: { email: string; password: string; fullName: string }) => Promise<void>;
+  register: (data: { email: string;username: string; password: string; fullName: string }) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 };
