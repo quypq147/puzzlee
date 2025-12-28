@@ -61,3 +61,31 @@ export const updateOrganization = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Khong the update to chuc' });
   }
 };
+export const getOrganizationMembers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // Lấy orgId từ URL
+    
+    // Tìm tất cả thành viên của org này
+    const members = await prisma.organizationMember.findMany({
+      where: { organizationId: id },
+      include: {
+        user: { 
+          // Join sang bảng User để lấy thông tin hiển thị
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            username: true,
+            avatarUrl: true
+          }
+        }
+      },
+      orderBy: { joinedAt: 'desc' } // Sắp xếp người mới vào trước
+    });
+
+    res.json(members);
+  } catch (error) {
+    console.error("Get Org Members Error:", error);
+    res.status(500).json({ message: 'Lỗi lấy danh sách thành viên tổ chức' });
+  }
+};
