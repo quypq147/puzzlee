@@ -137,8 +137,8 @@ export const updateEvent = async (req: Request, res: Response) => {
         title,
         description,
         startDate,
-        endDate,     // [MỚI]
-        settings,    // [MỚI] - Prisma tự xử lý JSON
+        endDate,     
+        settings,    
         isActive
       }
     });

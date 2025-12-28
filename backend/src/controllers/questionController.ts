@@ -5,7 +5,7 @@ import { prisma  } from "../../lib/prisma";
 // 1. Lấy danh sách câu hỏi (Mới thêm)
 export const getQuestionsByEvent = async (req: Request, res: Response) => {
   try {
-    const { eventId } = req.params;
+    const eventId = req.query.eventId as string;
     // Lấy userId để check xem user này đã vote câu nào chưa (nếu cần)
     const userId = (req as any).user?.userId;
 

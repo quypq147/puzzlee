@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    domains: ["ui-avatars.com", "lh3.googleusercontent.com"], // Thêm các domain ảnh khác nếu cần
+    remotePatterns: [
+      { protocol: "https", hostname: "ui-avatars.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" }
+    ], // Thêm các domain ảnh khác nếu cần
   },
 };
 
