@@ -13,3 +13,11 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     next();
   });
 };
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+  // Kiểm tra role trong token (được sign lúc login trong authController)
+  if (!user || user.role !== 'ADMIN') {
+    return res.status(403).json({ message: "Forbidden: Yêu cầu quyền Admin" });
+  }
+  next();
+};

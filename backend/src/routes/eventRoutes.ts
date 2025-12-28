@@ -1,13 +1,27 @@
 import { Router } from 'express';
-import { createEvent, getEventsByOrg, joinEventByCode } from '../controllers/eventController';
+import { 
+  createEvent, 
+  getEventsByOrg, 
+  joinEventByCode,
+  getEventByCode, // Import mới
+  updateEvent,    // Import mới
+  deleteEvent,     // Import mới
+  getEventStats
+} from '../controllers/eventController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/join', authenticateToken, joinEventByCode); // Join bằng code
+// Public / Guest (Nếu cần)
+router.post('/join', authenticateToken, joinEventByCode); 
 
-// Routes quản lý (Cần login)
+// Protected Routes
 router.post('/', authenticateToken, createEvent);
 router.get('/org/:orgId', authenticateToken, getEventsByOrg);
+router.get('/:code/stats', authenticateToken, getEventStats); // GET /api/events/CODE123/stats
+// [MỚI] Các route quản lý chi tiết
+router.get('/:code/details', authenticateToken, getEventByCode); // GET /api/events/CODE123/details
+router.patch('/:id', authenticateToken, updateEvent);            // PATCH /api/events/:id
+router.delete('/:id', authenticateToken, deleteEvent);           // DELETE /api/events/:id
 
 export default router;

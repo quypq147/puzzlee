@@ -107,13 +107,17 @@ model Event {
   title          String
   description    String?
   startDate      DateTime @default(now())
+  
+  // [MỚI] Thêm các trường này
+  endDate        DateTime?
+  settings       Json?    @default("{}") // Lưu: { moderation: true, anonymous: true, ... }
+  
   isActive       Boolean  @default(true)
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   creatorId      String?
-
   members        EventMember[]
   questions      Question[]
 
