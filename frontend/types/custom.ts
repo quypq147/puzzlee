@@ -2,6 +2,7 @@
 export type User = {
   id: string;
   email: string;
+  username: string;
   fullName: string | null;
   avatarUrl?: string | null;
   systemRole: 'ADMIN' | 'USER';

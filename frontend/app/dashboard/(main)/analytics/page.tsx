@@ -17,9 +17,7 @@ import { Line, Doughnut } from "react-chartjs-2";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { apiClient } from "@/lib/api-client"; // [FIX] Dùng API Client thay Supabase
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { 
@@ -29,7 +27,6 @@ import {
   CheckCircle2, 
   TrendingUp, 
   Hash, 
-  Calendar,
   MoreVertical,
   ArrowUpRight,
   Filter
@@ -46,22 +43,22 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, ArcElement);
 
 // --- TYPES ---
+// Type khớp với dữ liệu trả về từ Backend (Prisma)
 type QuestionData = {
   id: string;
   content: string;
-  score: number; // Lượt vote
-  created_at: string;
-  is_answered: boolean;
-  event_id: string;
-  events?: {
+  upvotes: number; // Prisma: upvotes, Supabase cũ: score
+  createdAt: string;
+  isAnswered: boolean;
+  event: {
     title: string;
     code: string;
   };
-  profiles?: {
-    full_name: string;
-    avatar_url: string;
-  };
-  is_anonymous: boolean;
+  author: {
+    fullName: string | null;
+    avatarUrl: string | null;
+  } | null;
+  isAnonymous: boolean;
 };
 
 type DashboardStats = {
@@ -72,9 +69,6 @@ type DashboardStats = {
 };
 
 export default function AnalyticsPage() {
-  const { user } = useAuth();
-  const supabase = createClient();
-
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     totalQuestions: 0,
@@ -83,50 +77,25 @@ export default function AnalyticsPage() {
     activeEvents: 0
   });
   const [questions, setQuestions] = useState<QuestionData[]>([]);
+  
+  // Dữ liệu biểu đồ (Giữ nguyên logic random frontend hoặc chờ update backend sau)
   const [activityData, setActivityData] = useState<number[]>(new Array(7).fill(0));
 
   // --- FETCH DATA ---
   useEffect(() => {
     const fetchAnalytics = async () => {
-      if (!user) return;
       setLoading(true);
-
       try {
-        // 1. Lấy tất cả câu hỏi thuộc sự kiện do User tạo
-        // Dùng events!inner để lọc ngược từ bảng con -> cha
-        const { data, error } = await supabase
-          .from("questions")
-          .select(`
-            *,
-            events!inner(id, title, code, created_by),
-            profiles:author_id(full_name, avatar_url)
-          `)
-          .eq("events.created_by", user.id)
-          .order("score", { ascending: false }); // Lấy top vote
-
-        if (error) throw error;
+        // [FIX] Gọi API Backend: GET /api/users/analytics
+        const { data } = await apiClient.get("/users/analytics");
         
-        const qData = data as unknown as QuestionData[];
-        setQuestions(qData);
+        // Cập nhật State từ response
+        setStats(data.stats);
+        setQuestions(data.topQuestions);
 
-        // 2. Tính toán Stats
-        const totalQ = qData.length;
-        const totalV = qData.reduce((sum, q) => sum + (q.score || 0), 0);
-        const answeredCount = qData.filter(q => q.is_answered).length;
-        // Đếm số sự kiện duy nhất
-        const uniqueEvents = new Set(qData.map(q => q.event_id)).size;
-
-        setStats({
-          totalQuestions: totalQ,
-          totalVotes: totalV,
-          answeredRate: totalQ > 0 ? Math.round((answeredCount / totalQ) * 100) : 0,
-          activeEvents: uniqueEvents
-        });
-
-        // 3. Tính toán Activity (Số câu hỏi theo giờ - Demo)
-        // Logic thực tế: Group by hour. Ở đây giả lập random nhẹ để biểu đồ đẹp nếu ít dữ liệu
-        // Bạn có thể thay bằng logic map q.created_at thật
-        const chartData = [0, 0, 0, 0, 0, 0, 0].map(() => Math.floor(Math.random() * (totalQ > 10 ? 10 : totalQ)));
+        // Tạo dữ liệu biểu đồ giả lập (hoặc lấy từ API nếu backend hỗ trợ)
+        const totalQ = data.stats.totalQuestions;
+        const chartData = [0, 0, 0, 0, 0, 0, 0].map(() => Math.floor(Math.random() * (totalQ > 10 ? 10 : totalQ + 1)));
         setActivityData(chartData);
 
       } catch (error) {
@@ -138,7 +107,7 @@ export default function AnalyticsPage() {
     };
 
     fetchAnalytics();
-  }, [user]);
+  }, []);
 
   // --- CHART CONFIG ---
   const lineChartData = useMemo(() => ({
@@ -146,7 +115,7 @@ export default function AnalyticsPage() {
     datasets: [{
       label: "Tương tác mới",
       data: activityData,
-      borderColor: "#1c5b9f", // Màu xanh chủ đạo của App
+      borderColor: "#1c5b9f", 
       backgroundColor: (context: any) => {
         const ctx = context.chart.ctx;
         const gradient = ctx.createLinearGradient(0, 0, 0, 300);
@@ -166,7 +135,7 @@ export default function AnalyticsPage() {
     labels: ["Đã trả lời", "Chưa trả lời"],
     datasets: [{
       data: [stats.answeredRate, 100 - stats.answeredRate],
-      backgroundColor: ["#10b981", "#e5e7eb"], // Xanh lá và Xám
+      backgroundColor: ["#10b981", "#e5e7eb"], 
       borderWidth: 0,
       hoverOffset: 4,
     }],
@@ -271,7 +240,7 @@ export default function AnalyticsPage() {
           </Card>
       </div>
 
-      {/* 4. Top Questions Table - UI Giống hệt trang Team */}
+      {/* 4. Top Questions Table */}
       <Card className="overflow-hidden border shadow-sm bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800">
         <div className="p-6 border-b bg-white dark:bg-gray-900 flex justify-between items-center">
             <div>
@@ -298,7 +267,7 @@ export default function AnalyticsPage() {
           ) : questions.length === 0 ? (
              <div className="text-center py-12 text-muted-foreground">Chưa có dữ liệu.</div>
           ) : (
-            questions.slice(0, 5).map((q) => (
+            questions.map((q) => (
               <div key={q.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
                 
                 {/* Col 1: Content & Author */}
@@ -308,11 +277,11 @@ export default function AnalyticsPage() {
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                       <Avatar className="h-5 w-5 border">
-                        <AvatarImage src={q.profiles?.avatar_url} />
-                        <AvatarFallback className="text-[9px]">{q.profiles?.full_name?.[0] || "?"}</AvatarFallback>
+                        <AvatarImage src={q.author?.avatarUrl || ""} />
+                        <AvatarFallback className="text-[9px]">{q.author?.fullName?.[0] || "?"}</AvatarFallback>
                       </Avatar>
                       <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                        {q.is_anonymous ? "Ẩn danh" : q.profiles?.full_name}
+                        {q.isAnonymous ? "Ẩn danh" : (q.author?.fullName || "Người dùng")}
                       </span>
                   </div>
                 </div>
@@ -321,7 +290,7 @@ export default function AnalyticsPage() {
                 <div className="col-span-2 flex justify-center">
                    <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-full">
                       <ThumbsUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{q.score}</span>
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{q.upvotes}</span>
                    </div>
                 </div>
 
@@ -332,15 +301,15 @@ export default function AnalyticsPage() {
                         <Hash className="w-3.5 h-3.5" />
                      </div>
                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate max-w-[150px]">{q.events?.title}</p>
-                        <p className="text-xs text-muted-foreground">#{q.events?.code}</p>
+                        <p className="text-sm font-medium truncate max-w-[150px]">{q.event?.title}</p>
+                        <p className="text-xs text-muted-foreground">#{q.event?.code}</p>
                      </div>
                   </div>
                 </div>
 
                 {/* Col 4: Date */}
                 <div className="col-span-2 hidden sm:block text-right text-sm text-muted-foreground">
-                   {format(new Date(q.created_at), "dd/MM/yyyy", { locale: vi })}
+                   {q.createdAt ? format(new Date(q.createdAt), "dd/MM/yyyy", { locale: vi }) : "N/A"}
                 </div>
 
                 {/* Col 5: Menu */}

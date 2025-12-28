@@ -2,34 +2,21 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { apiClient } from "@/lib/api-client"; // Dùng API Client
 import { cn } from "@/lib/utils";
 
 // Icons
 import {
-  ArrowLeft,
-  Calendar,
-  Settings,
-  Users,
-  BarChart2,
-  QrCode,
-  Share2,
-  Play,
   MessageSquare,
-  Palette,
+  BarChart2,
   Info,
   Lock,
   Globe,
   Key,
   Building2,
-  HelpCircle,
-  Save,
   Trash2,
   RotateCcw,
-  CheckCircle2,
 } from "lucide-react";
 
 // UI Components
@@ -40,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-// Giả lập type cho Settings (Cần thêm cột vào DB sau này)
+// Type định nghĩa Settings (Khớp với Prisma Json)
 type EventSettings = {
   moderation: boolean;
   anonymous: boolean;
@@ -50,101 +37,109 @@ type EventSettings = {
   privacy: "public" | "password" | "sso";
 };
 
+// Default Settings
+const DEFAULT_SETTINGS: EventSettings = {
+  moderation: false,
+  anonymous: true,
+  upvotes: true,
+  poll_auto_results: true,
+  quiz_leaderboard: true,
+  privacy: "public",
+};
+
 export default function EventSettingsPage({
   params,
 }: {
   params: Promise<{ code: string }>;
 }) {
-  // 1. Unwrap params
   const { code } = use(params);
   const router = useRouter();
-  const supabase = createClient();
 
-  // 2. States
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Dữ liệu từ DB
+  // Dữ liệu Event
   const [eventData, setEventData] = useState<any>(null);
+  const [settings, setSettings] = useState<EventSettings>(DEFAULT_SETTINGS);
 
-  // Dữ liệu Settings (Mockup - bạn cần thêm cột JSONB 'settings' vào bảng events để lưu thật)
-  const [settings, setSettings] = useState<EventSettings>({
-    moderation: true,
-    anonymous: true,
-    upvotes: true,
-    poll_auto_results: false,
-    quiz_leaderboard: true,
-    privacy: "public",
-  });
-
-  // 3. Fetch Data
+  // 1. Fetch Data từ Backend
   useEffect(() => {
     const fetchEvent = async () => {
       setLoading(true);
-      // Logic cũ dùng code, nhưng ở đây params là eventId (thường là code trong dự án của bạn)
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .eq("code", code) // Giả sử eventId trên URL chính là code
-        .single();
-
-      if (error || !data) {
-        toast.error("Không tìm thấy sự kiện");
-        // router.push("/dashboard/events"); // Uncomment nếu muốn redirect
+      try {
+        // Gọi API lấy chi tiết sự kiện
+        const { data } = await apiClient.get(`/events/${code}/details`);
+        
+        setEventData(data);
+        
+        // Parse settings từ JSON DB (nếu có)
+        if (data.settings) {
+            // Merge với default để tránh lỗi thiếu key
+            setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+        }
+      } catch (error) {
+        toast.error("Không tìm thấy sự kiện hoặc không có quyền truy cập");
+        // router.push("/dashboard/events");
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setEventData(data);
-      // Nếu có cột settings trong DB: setSettings(data.settings)
-      setLoading(false);
     };
 
     fetchEvent();
-  }, [code, supabase, router]);
+  }, [code, router]);
 
-  // 4. Handle Updates
+  // 2. Handle Update
   const handleUpdate = async () => {
     if (!eventData) return;
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from("events")
-      .update({
+    try {
+      // Gọi API PATCH để lưu title, date và settings
+      await apiClient.patch(`/events/${eventData.id}`, {
         title: eventData.title,
-        // code: eventData.code, // Thường không nên cho sửa Code dễ dàng
-        start_time: eventData.start_time,
-        end_time: eventData.end_time,
-        updated_at: new Date().toISOString(),
-        // settings: settings // TODO: Thêm cột settings kiểu JSONB vào DB
-      })
-      .eq("id", eventData.id);
+        description: eventData.description,
+        startDate: eventData.startDate, // Lưu ý: Backend trả về startDate, Prisma map camelCase
+        endDate: eventData.endDate,
+        settings: settings, // Gửi cả cục object settings lên
+      });
 
-    setIsSaving(false);
-
-    if (error) {
-      toast.error("Lỗi khi cập nhật sự kiện");
-    } else {
       toast.success("Đã lưu thay đổi thành công!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi khi cập nhật sự kiện");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 3. Handle Delete
+  const handleDelete = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa sự kiện này? Hành động không thể hoàn tác.")) return;
+
+    try {
+        await apiClient.delete(`/events/${eventData.id}`);
+        toast.success("Đã xóa sự kiện");
+        router.push("/dashboard/events");
+    } catch (error) {
+        toast.error("Lỗi xóa sự kiện");
     }
   };
 
   if (loading)
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
+    
   if (!eventData) return null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-(--spacing(16)))] bg-[#f8f9fb] dark:bg-[#122017]">
-      {/* BODY CONTENT: 2 Columns Layout */}
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-        {/* RIGHT MAIN CONTENT (Scrollable) */}
-        <main className="flex-1 bg-[#f8f9fb] dark:bg-[#122017] overflow-y-auto p-4 md:p-8 lg:p-10 scroll-smooth">
-          <div className="max-w-4xl mx-auto pb-20 space-y-6">
-            {/* Title Section */}
+    <div className="flex flex-col bg-[#f8f9fb] dark:bg-[#122017] min-h-full">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 scroll-smooth">
+        <div className="max-w-4xl mx-auto pb-20 space-y-6">
+            
+            {/* Header */}
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -154,14 +149,14 @@ export default function EventSettingsPage({
                   Quản lý thông tin chung và các tính năng tương tác.
                 </p>
               </div>
-              <div className="flex gap-3 sticky top-0 bg-[#f8f9fb] dark:bg-[#122017] z-10 py-2">
+              <div className="flex gap-3 sticky top-4 z-10">
                 <Button variant="outline" onClick={() => router.back()}>
                   Hủy bỏ
                 </Button>
                 <Button
                   onClick={handleUpdate}
                   disabled={isSaving}
-                  className="bg-primary hover:bg-primary-hover text-white"
+                  className="bg-primary hover:bg-primary/90 text-white"
                 >
                   {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
                 </Button>
@@ -182,7 +177,7 @@ export default function EventSettingsPage({
                   </Label>
                   <Input
                     id="title"
-                    value={eventData.title}
+                    value={eventData.title || ""}
                     onChange={(e) =>
                       setEventData({ ...eventData, title: e.target.value })
                     }
@@ -200,57 +195,65 @@ export default function EventSettingsPage({
                     <Input
                       id="code"
                       value={eventData.code}
-                      readOnly // Thường code không nên sửa
+                      readOnly
                       className="pl-7 bg-gray-100 dark:bg-gray-900 font-semibold cursor-not-allowed text-gray-500"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Mã dùng để khán giả tham gia.
-                  </p>
                 </div>
+                
+                {/* Start Date */}
                 <div>
-                  <Label className="mb-2 block">Thời gian diễn ra</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="datetime-local"
-                      value={
-                        eventData.start_time
-                          ? new Date(eventData.start_time)
-                              .toISOString()
-                              .slice(0, 16)
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setEventData({
-                          ...eventData,
-                          start_time: e.target.value,
-                        })
-                      }
-                      className="bg-white dark:bg-gray-800 text-sm"
-                    />
-                    {/* Có thể thêm End Time nếu cần */}
-                  </div>
+                  <Label className="mb-2 block">Bắt đầu</Label>
+                  <Input
+                    type="datetime-local"
+                    value={
+                      eventData.startDate
+                        ? new Date(eventData.startDate).toISOString().slice(0, 16)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setEventData({
+                        ...eventData,
+                        startDate: e.target.value,
+                      })
+                    }
+                    className="bg-white dark:bg-gray-800 text-sm"
+                  />
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <Label className="mb-2 block">Kết thúc (Tuỳ chọn)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={
+                      eventData.endDate
+                        ? new Date(eventData.endDate).toISOString().slice(0, 16)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setEventData({
+                        ...eventData,
+                        endDate: e.target.value,
+                      })
+                    }
+                    className="bg-white dark:bg-gray-800 text-sm"
+                  />
                 </div>
               </div>
             </Card>
 
             {/* CARD 2: Q&A SETTINGS */}
             <Card className="border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+              <div className="p-6 border-b border-gray-100 dark:border-gray-700">
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-blue-500" /> Thiết lập
-                  Hỏi đáp (Q&A)
+                  <MessageSquare className="w-5 h-5 text-blue-500" /> Thiết lập Hỏi đáp
                 </h3>
-                {/* Master Toggle */}
-                <Switch
-                  checked={true}
-                  className="data-[state=checked]:bg-[#39E079]"
-                />
               </div>
               <div className="p-6 space-y-6">
                 <ToggleItem
                   title="Kiểm duyệt câu hỏi (Moderation)"
-                  desc="Câu hỏi phải được duyệt trước khi hiển thị."
+                  desc="Câu hỏi phải được duyệt bởi Host trước khi hiển thị cho mọi người."
                   checked={settings.moderation}
                   onCheckedChange={(c) =>
                     setSettings({ ...settings, moderation: c })
@@ -259,7 +262,7 @@ export default function EventSettingsPage({
                 <Separator />
                 <ToggleItem
                   title="Câu hỏi ẩn danh"
-                  desc="Cho phép người tham gia đặt câu hỏi không cần tên."
+                  desc="Cho phép người tham gia đặt câu hỏi mà không cần lộ danh tính."
                   checked={settings.anonymous}
                   onCheckedChange={(c) =>
                     setSettings({ ...settings, anonymous: c })
@@ -268,7 +271,7 @@ export default function EventSettingsPage({
                 <Separator />
                 <ToggleItem
                   title="Bình chọn câu hỏi (Upvotes)"
-                  desc="Cho phép người tham gia like câu hỏi của người khác."
+                  desc="Người tham gia có thể bình chọn cho câu hỏi hay."
                   checked={settings.upvotes}
                   onCheckedChange={(c) =>
                     setSettings({ ...settings, upvotes: c })
@@ -293,15 +296,6 @@ export default function EventSettingsPage({
                     setSettings({ ...settings, poll_auto_results: c })
                   }
                 />
-                <Separator />
-                <ToggleItem
-                  title="Bảng xếp hạng Quiz"
-                  desc="Hiển thị top 5 người chơi xuất sắc nhất."
-                  checked={settings.quiz_leaderboard}
-                  onCheckedChange={(c) =>
-                    setSettings({ ...settings, quiz_leaderboard: c })
-                  }
-                />
               </div>
             </Card>
 
@@ -321,7 +315,7 @@ export default function EventSettingsPage({
                       setSettings({ ...settings, privacy: "public" })
                     }
                     icon={Globe}
-                    label="Công khai (Có mã Code)"
+                    label="Công khai"
                     desc="Bất kỳ ai có mã sự kiện đều có thể tham gia."
                   />
                   <RadioItem
@@ -331,14 +325,14 @@ export default function EventSettingsPage({
                     }
                     icon={Key}
                     label="Bảo mật bằng mật khẩu"
-                    desc="Người tham gia cần nhập mật khẩu phụ."
+                    desc="Người tham gia cần nhập mật khẩu phụ (Tính năng đang phát triển)."
                   />
                   <RadioItem
                     active={settings.privacy === "sso"}
                     onClick={() => setSettings({ ...settings, privacy: "sso" })}
                     icon={Building2}
-                    label="Xác thực SSO"
-                    desc="Chỉ nhân viên trong tổ chức mới có thể truy cập."
+                    label="Nội bộ tổ chức"
+                    desc="Chỉ thành viên trong Organization mới được tham gia."
                   />
                 </div>
               </div>
@@ -350,66 +344,32 @@ export default function EventSettingsPage({
                 Vùng nguy hiểm
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Hành động này không thể hoàn tác.
+                Xóa sự kiện sẽ xóa toàn bộ câu hỏi và kết quả bình chọn.
               </p>
               <div className="flex flex-wrap gap-4">
-                <Button
-                  variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                <Button 
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50"
+                    onClick={() => toast.info("Tính năng reset đang phát triển")}
                 >
                   <RotateCcw className="w-4 h-4 mr-2" /> Đặt lại dữ liệu
                 </Button>
-                <Button variant="destructive">
+                <Button variant="destructive" onClick={handleDelete}>
                   <Trash2 className="w-4 h-4 mr-2" /> Xóa sự kiện
                 </Button>
               </div>
             </div>
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
 
 // --- SUB COMPONENTS ---
 
-function NavButton({
-  icon: Icon,
-  label,
-  active = false,
-}: {
-  icon: any;
-  label: string;
-  active?: boolean;
-}) {
+function ToggleItem({ title, desc, checked, onCheckedChange }: any) {
   return (
-    <button
-      className={cn(
-        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-left text-sm",
-        active
-          ? "bg-[#39E079]/10 text-[#39E079]"
-          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-      )}
-    >
-      <Icon className={cn("w-5 h-5", active ? "text-[#39E079]" : "")} />
-      {label}
-    </button>
-  );
-}
-
-function ToggleItem({
-  title,
-  desc,
-  checked,
-  onCheckedChange,
-}: {
-  title: string;
-  desc: string;
-  checked: boolean;
-  onCheckedChange: (c: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between">
+    <div className="flex items-start justify-between gap-4">
       <div>
         <h4 className="text-base font-semibold text-gray-900 dark:text-white">
           {title}

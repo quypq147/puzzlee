@@ -47,3 +47,17 @@ export const createOrganization = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Could not create organization' });
   }
 };
+export const updateOrganization = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, slug } = req.body; 
+    const updatedOrg = await prisma.organization.update({
+      where: { id },
+      data: { name, slug }
+    });
+
+    res.json(updatedOrg);
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the update to chuc' });
+  }
+};

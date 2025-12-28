@@ -21,7 +21,7 @@ export function LoginForm() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
+      await login({ email, password });
       toast({ title: "Thành công", description: "Đăng nhập thành công" });
       // useAuth đã tự redirect sang /dashboard
     } catch (error: any) {

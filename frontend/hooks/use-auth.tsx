@@ -8,14 +8,15 @@ import {
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import apiClient from "@/lib/api-client"; // Đảm bảo bạn đã có file này
+import {apiClient} from "@/lib/api-client"; // Đảm bảo bạn đã có file này
 import { User } from "@/types/custom";
+import { authApi } from "@/lib/api/auth";
 
 type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
   login: (data: { email: string; password: string }) => Promise<void>;
-  register: (data: { email: string; password: string; fullName: string }) => Promise<void>;
+  register: (data: { email: string;username: string; password: string; fullName: string }) => Promise<void>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 };
@@ -62,18 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 2. Login
   const login = async (payload: { email: string; password: string }) => {
-    try {
-      const res = await apiClient.post("/auth/login", payload);
-      const { token, user } = res.data;
-      
-      localStorage.setItem("token", token);
-      setUser(user);
-      
-      router.push("/dashboard");
-    } catch (error) {
-      throw error;
-    }
-  };
+  try {
+    const res = await authApi.login(payload); // Gọi qua api wrapper
+    const { token, user } = res.data;
+    localStorage.setItem("token", token);
+    setUser(user);
+    router.push("/dashboard");
+  } catch (error) {
+    throw error;
+  }
+};
 
   // 3. Register
   const register = async (payload: { email: string; username: string; password: string; fullName: string }) => {

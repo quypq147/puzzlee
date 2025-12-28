@@ -1,75 +1,30 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+import axios from 'axios';
 
-type RequestOptions = RequestInit & {
-  params?: Record<string, string>;
-};
+const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-// Hàm helper để giả lập axios response
-const handleResponse = async (res: Response) => {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw { response: { data, status: res.status } }; // Giả lập lỗi axios
+export const apiClient = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Tự động đính kèm Token vào mỗi request
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token'); // Hoặc lấy từ cookie/session
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return { data }; // Giả lập success axios
-};
+  return config;
+});
 
-const getHeaders = () => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
-
-export const apiClient = {
-  get: async (url: string, options: RequestOptions = {}) => {
-    const query = options.params ? `?${new URLSearchParams(options.params)}` : "";
-    const res = await fetch(`${BASE_URL}${url}${query}`, {
-      method: "GET",
-      headers: { ...getHeaders(), ...options.headers },
-      ...options,
-    });
-    return handleResponse(res);
-  },
-
-  post: async (url: string, body: any, options: RequestOptions = {}) => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "POST",
-      headers: { ...getHeaders(), ...options.headers },
-      body: JSON.stringify(body),
-      ...options,
-    });
-    return handleResponse(res);
-  },
-
-  put: async (url: string, body: any, options: RequestOptions = {}) => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "PUT",
-      headers: { ...getHeaders(), ...options.headers },
-      body: JSON.stringify(body),
-      ...options,
-    });
-    return handleResponse(res);
-  },
-
-  patch: async (url: string, body: any, options: RequestOptions = {}) => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "PATCH",
-      headers: { ...getHeaders(), ...options.headers },
-      body: JSON.stringify(body),
-      ...options,
-    });
-    return handleResponse(res);
-  },
-
-  delete: async (url: string, options: RequestOptions = {}) => {
-    const res = await fetch(`${BASE_URL}${url}`, {
-      method: "DELETE",
-      headers: { ...getHeaders(), ...options.headers },
-      ...options,
-    });
-    return handleResponse(res);
-  },
-};
-
-export default apiClient;
+// Xử lý lỗi chung (VD: Token hết hạn thì logout)
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Logic logout: localStorage.removeItem('token'); window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);

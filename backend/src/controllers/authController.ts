@@ -1,5 +1,6 @@
+// backend/src/controllers/authController.ts
 import { Request, Response } from 'express';
-import { prisma } from '../../lib/prisma'; // Đảm bảo đường dẫn đúng tới file prisma instance
+import { prisma } from '../../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -7,7 +8,7 @@ export const register = async (req: Request, res: Response) => {
   try {
     const { email, password, fullName } = req.body;
 
-    // 1. Check user exist
+    // 1. Kiểm tra user đã tồn tại chưa
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ message: 'Email already exists' });
@@ -15,12 +16,18 @@ export const register = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // [FIX] Tạo username mặc định từ email + số ngẫu nhiên để tránh trùng
+    // Ví dụ: email "test@gmail.com" -> username "test_1234"
+    const baseUsername = email.split('@')[0];
+    const uniqueUsername = `${baseUsername}_${Math.floor(Math.random() * 10000)}`;
+
     // 2. Transaction: Tạo User -> Tạo Org -> Add User làm Owner
     const result = await prisma.$transaction(async (tx) => {
-      // A. Tạo User
+      // A. Tạo User (Đã thêm username)
       const user = await tx.user.create({
         data: {
           email,
+          username: uniqueUsername, // <--- ĐÃ THÊM DÒNG NÀY
           passwordHash: hashedPassword,
           fullName,
         },
@@ -28,7 +35,6 @@ export const register = async (req: Request, res: Response) => {
 
       // B. Tạo tên Organization mặc định
       const orgName = `${fullName}'s Workspace`;
-      // Tạo slug đơn giản (cần hàm xử lý kỹ hơn trong thực tế)
       const slug = fullName.toLowerCase().replace(/ /g, '-') + '-' + Math.floor(Math.random() * 1000);
 
       // C. Tạo Organization và link User vào làm OWNER
@@ -50,7 +56,7 @@ export const register = async (req: Request, res: Response) => {
 
     res.status(201).json({
       message: 'User and Organization created successfully',
-      user: { id: result.user.id, email: result.user.email },
+      user: { id: result.user.id, email: result.user.email, username: result.user.username },
       organization: result.organization,
     });
 

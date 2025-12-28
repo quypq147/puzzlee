@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UserNav } from "@/components/layout/user-nav";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { OrganizationProvider } from "@/contexts/organization-context";
 
 // 1. Cấu hình Menu Sidebar
 const navItems = [
@@ -128,6 +129,7 @@ export default function DashboardLayout({
   };
 
   return (
+    <OrganizationProvider>
     <div className="min-h-screen w-full bg-[#f3f4f6] text-slate-800 font-sans flex">
       
       {/* SIDEBAR */}
@@ -183,5 +185,6 @@ export default function DashboardLayout({
         
       </main>
     </div>
+    </OrganizationProvider>
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Organization } from '@/types/custom';
-import apiClient from '@/lib/api-client';
+import {apiClient} from '@/lib/api-client';
 import { useAuth } from '@/hooks/use-auth';
 
 interface OrganizationContextType {
