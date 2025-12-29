@@ -11,22 +11,21 @@ import {
   LayoutList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { use } from "react"; // <--- 1. Import hook use
+import { use } from "react";
+// [MỚI] Import Dialog tạo tương tác
+import { CreateInteractionDialog } from "@/components/dialog/create-interaction-dialog";
 
 export default function QuestionsLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ code: string }>; // <--- 2. Đổi thành Promise
+  params: Promise<{ code: string }>;
 }) {
-  const { code } = use(params); // <--- 3. Unwrap params để lấy code
-
+  const { code } = use(params);
   const pathname = usePathname();
-  // Xây dựng base URL dùng biến 'code' đã lấy được
   const baseUrl = `/dashboard/events/${code}/questions`;
 
-  // Danh sách các tabs
   const tabs = [
     {
       name: "Hỏi đáp (Q&A)",
@@ -41,21 +40,20 @@ export default function QuestionsLayout({
       isActive: (path: string) => path.includes("/polls"),
     },
     {
-      name: "Câu đố",
+      name: "Câu đố (Quiz)", // Ví dụ thêm tab Quiz nếu cần
       href: `${baseUrl}/quiz`,
       icon: CheckCircle2,
       isActive: (path: string) => path.includes("/quiz"),
     },
   ];
 
-  // Kiểm tra xem có đang ở trang tạo mới không
-  const isCreatePage = pathname.endsWith("/new");
-
   return (
-    <div className="flex flex-col h-full space-y-6 p-6">
-      {/* --- THANH TABS --- */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-4">
-        <div className="flex items-center bg-muted/50 p-1 rounded-lg">
+    <div className="flex flex-col h-full">
+      {/* Header Toolbar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b bg-white dark:bg-gray-900 px-6 py-3 shrink-0">
+        
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg overflow-x-auto max-w-full">
           {tabs.map((tab) => {
             const active = tab.isActive(pathname);
             const Icon = tab.icon;
@@ -66,7 +64,7 @@ export default function QuestionsLayout({
                   variant="ghost"
                   size="sm"
                   className={cn(
-                    "gap-2 rounded-md transition-all",
+                    "gap-2 rounded-md transition-all whitespace-nowrap",
                     active
                       ? "bg-background text-primary shadow-sm"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -80,27 +78,31 @@ export default function QuestionsLayout({
           })}
         </div>
 
-        {!isCreatePage ? (
-          <Link href={`${baseUrl}/`}>
-            <Button
-              size="sm"
-              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Tạo câu hỏi mới
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`${baseUrl}/qa`}>
-            <Button variant="outline" size="sm" className="gap-2">
-              <LayoutList className="h-4 w-4" />
-              Quay lại danh sách
-            </Button>
-          </Link>
-        )}
+        {/* [EDIT] Thay thế Link bằng CreateInteractionDialog */}
+        <CreateInteractionDialog 
+            eventId={code}
+            // Callback này có thể dùng để refresh dữ liệu nếu cần thiết 
+            // (Tuy nhiên danh sách câu hỏi thường tự refresh hoặc dùng realtime)
+            onQuestionCreated={() => {
+                // Có thể thêm logic reload hoặc toast thông báo tại đây
+                console.log("New interaction created!");
+            }}
+            trigger={
+                <Button
+                    size="sm"
+                    className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                >
+                    <PlusCircle className="h-4 w-4" />
+                    Tạo tương tác mới
+                </Button>
+            }
+        />
       </div>
 
-      <div className="flex-1 min-h-0">{children}</div>
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-950 relative">
+        {children}
+      </div>
     </div>
   );
 }

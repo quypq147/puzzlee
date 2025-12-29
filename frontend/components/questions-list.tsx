@@ -18,14 +18,25 @@ export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListPr
   const [sortBy, setSortBy] = useState<"newest" | "popular">("newest")
 
   const loadQuestions = async () => {
+    // [FIX 1] Kiểm tra quan trọng: Nếu chưa có eventId thì không gọi API
+    if (!eventId) return;
+
     setLoading(true)
     try {
       const typeQuery = type ? `&type=${type}` : ""
-      // Dùng apiClient tự động gắn base URL và token
-      const data = await apiClient<any[]>(`/questions?eventId=${eventId}${typeQuery}`)
-      setQuestions(data || [])
+      
+      // [FIX 2] Sử dụng apiClient.get() và truy cập res.data
+      const res = await apiClient.get(`/questions?eventId=${eventId}${typeQuery}`)
+      
+      // Kiểm tra dữ liệu trả về có phải mảng không
+      if (Array.isArray(res.data)) {
+        setQuestions(res.data)
+      } else {
+        setQuestions([])
+      }
     } catch (error) {
       console.error("Failed to load questions:", error)
+      setQuestions([])
     } finally {
       setLoading(false)
     }
@@ -37,7 +48,8 @@ export function QuestionsList({ eventId, refreshTrigger, type }: QuestionsListPr
 
   const sortedQuestions = [...questions].sort((a, b) => {
     if (sortBy === "popular") {
-      return (b.score || 0) - (a.score || 0)
+      // Backend trả về 'upvotes' hoặc 'score', kiểm tra field này trong console log nếu cần
+      return (b.upvotes || 0) - (a.upvotes || 0)
     }
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })

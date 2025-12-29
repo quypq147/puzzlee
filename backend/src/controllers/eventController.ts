@@ -235,3 +235,35 @@ export const getEventStats = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Lỗi lấy thống kê sự kiện' });
   }
 };
+export const getEventByCodePublic = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    
+    const event = await prisma.event.findUnique({
+      where: { code: code.toUpperCase() }, // Đảm bảo code viết hoa
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        description: true,
+        startDate: true,
+        isActive: true,
+        settings: true,
+        // Không trả về danh sách câu hỏi ở đây để bảo mật/tối ưu
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: "Sự kiện không tồn tại" });
+    }
+
+    if (!event.isActive) {
+      return res.status(400).json({ message: "Sự kiện đã đóng" });
+    }
+
+    res.json(event);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
