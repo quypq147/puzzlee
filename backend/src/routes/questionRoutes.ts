@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateToken, authenticateTokenOptional } from "../middleware/auth";
 import { 
   getQuestionsByEvent, 
   createQuestion,       // [Mới] Import thêm
@@ -14,7 +14,7 @@ const router = Router();
 // Frontend gọi: GET /api/questions?eventId=...
 // Controller dùng: req.query.eventId
 // -> Route phải là "/" thay vì "/event/:eventId"
-router.get("/", authenticateToken, getQuestionsByEvent);
+router.get("/", authenticateTokenOptional, getQuestionsByEvent);
 
 // 2. Tạo câu hỏi mới
 // Frontend gọi: POST /api/questions

@@ -108,3 +108,25 @@ export const requireEventRole = (roles: EventRole[]) => {
     }
   };
 };
+export const authenticateTokenOptional = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    // Không có token -> Gán role ảo là ANONYMOUS vào request
+    (req as any).user = { 
+       userId: null, 
+       role: 'ANONYMOUS' // Đánh dấu đây là khách
+    };
+    return next();
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'secret', (err: any, user: any) => {
+    if (err) {
+      (req as any).user = { userId: null, role: 'ANONYMOUS' };
+    } else {
+      (req as any).user = user;
+    }
+    next();
+  });
+};

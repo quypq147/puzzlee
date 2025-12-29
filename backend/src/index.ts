@@ -29,7 +29,7 @@ app.set('io', io);
 console.log("Server bat dau chay...");
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`User conn  ected: ${socket.id}`);
   
   socket.on('join-event', ({ eventId }) => {
     socket.join(eventId);
@@ -47,7 +47,7 @@ app.use((req, res, next) => {
     let data = '';
     req.on('data', chunk => { data += chunk; });
     req.on('end', () => {
-      console.log('Raw body received:', data); // Xem nó in ra cái gì?
+      console.log('Raw body received:', data);
     });
   }
   next();

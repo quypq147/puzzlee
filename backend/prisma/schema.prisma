@@ -24,6 +24,7 @@ enum EventRole {
   HOST        // Người chủ trì sự kiện (trong context 1 event cụ thể)
   MODERATOR   // Trợ giảng/Duyệt câu hỏi
   PARTICIPANT // Người tham gia
+  ANONYMOUS   // Người tham gia ẩn danh
 }
 
 // Các enum khác giữ nguyên
@@ -43,6 +44,11 @@ enum QuestionType {
 enum VoteType {
   UPVOTE
   DOWNVOTE
+}
+enum NotificationType {
+  INFO
+  WARNING
+  ALERT
 }
 
 
@@ -169,6 +175,9 @@ model Question {
 
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  guestName String?
+  guestMeta Json?
 
   @@index([eventId, status]) // Query phổ biến: Lấy tất cả câu hỏi đã duyệt của Event X
   @@map("questions")

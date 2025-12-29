@@ -27,8 +27,9 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
     const realEventId = await resolveEventId(eventId as string);
     if (!realEventId) return res.status(404).json({ message: "Sự kiện không tồn tại" });
 
-    const userId = (req as any).user?.userId;
-
+    const user = (req as any).user;
+    const userId = user?.userId || "";
+    
     const questions = await prisma.question.findMany({
       where: { 
         eventId: realEventId,
