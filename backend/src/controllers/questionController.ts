@@ -23,7 +23,6 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
     let { eventId } = req.query;
     if (!eventId) return res.status(400).json({ message: "Thiếu eventId" });
 
-    // [FIX] Convert Code -> UUID nếu cần
     const realEventId = await resolveEventId(eventId as string);
     if (!realEventId) return res.status(404).json({ message: "Sự kiện không tồn tại" });
 
@@ -33,7 +32,7 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
     const questions = await prisma.question.findMany({
       where: { 
         eventId: realEventId,
-        status: { not: "HIDDEN" } // Mặc định không lấy câu đã ẩn
+        status: { not: "HIDDEN" }
       },
       include: {
         author: {
@@ -43,11 +42,10 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
           where: { userId: userId || "" },
           select: { type: true }
         },
-        // [MỚI] Include thêm pollOptions để hiển thị trắc nghiệm
         pollOptions: {
           include: {
-             _count: { select: { votes: true } }, // Đếm số vote cho mỗi option
-             votes: { where: { userId: userId || "" }, select: { userId: true } } // Check user đã vote option nào
+             _count: { select: { votes: true } },
+             votes: { where: { userId: userId || "" }, select: { userId: true } }
           }
         }
       },
@@ -58,25 +56,44 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
       ]
     });
 
-    // Format lại dữ liệu
+    // [FIX] Lấy Role của Author trong Event này
+    // Cách tối ưu hơn là dùng include lồng nhau, nhưng để đơn giản ta map lại:
+    const authorIds = questions
+        .map(q => q.authorId)
+        .filter((id): id is string => id !== null);
+    
+    // Tìm danh sách member tương ứng với các author trên
+    const members = await prisma.eventMember.findMany({
+        where: {
+            eventId: realEventId,
+            userId: { in: authorIds }
+        },
+        select: { userId: true, role: true }
+    });
+
+    // Tạo Map để tra cứu nhanh: userId -> role
+    const roleMap = new Map(members.map(m => [m.userId, m.role]));
+
     const formattedQuestions = questions.map(q => {
-      // Logic Vote câu hỏi
       let userVoteValue = 0;
       if (q.votes.length > 0) userVoteValue = q.votes[0].type === 'UPVOTE' ? 1 : -1;
 
-      // Logic Poll Options
       const formattedOptions = q.pollOptions.map(opt => ({
         id: opt.id,
         content: opt.content,
         voteCount: opt._count.votes,
-        isVoted: opt.votes.length > 0 // User hiện tại đã chọn option này chưa
+        isVoted: opt.votes.length > 0
       }));
+
+      // [FIX] Gán role vào response
+      const authorRole = q.authorId ? roleMap.get(q.authorId) : null;
 
       return {
         ...q,
         userVote: userVoteValue,
-        votes: undefined, // Ẩn field raw
+        votes: undefined,
         pollOptions: formattedOptions,
+        authorRole: authorRole // Trả về role (HOST, MODERATOR, MEMBER)
       };
     });
 
@@ -91,12 +108,16 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
 export const createQuestion = async (req: Request, res: Response) => {
   try {
     const { content, isAnonymous, eventId, type, pollOptions } = req.body;
-    const userId = (req as any).user?.userId; 
+    const user = (req as any).user;
+    const userId = user?.userId || null; 
+
 
     // [FIX] Convert Code -> UUID
     const realEventId = await resolveEventId(eventId);
     if (!realEventId) return res.status(404).json({ message: "Sự kiện không tồn tại" });
 
+    let finalAuthorId = userId;
+    if (isAnonymous) finalAuthorId = null;
     // Validate loại câu hỏi
     const questionType = (type && ['QA', 'POLL', 'QUIZ'].includes(type)) 
       ? type as QuestionType 
@@ -105,9 +126,9 @@ export const createQuestion = async (req: Request, res: Response) => {
     const newQuestion = await prisma.question.create({
       data: {
         content,
-        isAnonymous,
+        isAnonymous : isAnonymous || false,
         eventId: realEventId,
-        authorId: isAnonymous ? null : userId,
+        authorId: finalAuthorId,
         status: "PENDING", // Hoặc APPROVED tuỳ setting
         type: questionType,
         

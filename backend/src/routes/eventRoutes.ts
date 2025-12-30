@@ -14,7 +14,7 @@ import { authenticateToken } from '../middleware/auth';
 const router = Router();
 
 // Public / Guest (Nếu cần)
-router.post('/join', authenticateToken, joinEventByCode); 
+router.post('/join', joinEventByCode); 
 router.get("/code/:code", getEventByCodePublic);
 // Protected Routes
 router.post('/', authenticateToken, createEvent);

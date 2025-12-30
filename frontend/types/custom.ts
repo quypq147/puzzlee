@@ -52,4 +52,5 @@ export type Question = {
     avatarUrl?: string;
   } | null;
   isVoted?: boolean; 
+  authorRole?: string | null; // [FIX] Thêm role của tác giả trong Event
 };
