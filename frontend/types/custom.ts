@@ -53,4 +53,7 @@ export type Question = {
   } | null;
   isVoted?: boolean; 
   authorRole?: string | null; // [FIX] Thêm role của tác giả trong Event
+  // [MỚI] Media hỗ trợ ảnh/video
+  mediaUrl?: string;
+  mediaType?: string;
 };

@@ -1,30 +1,27 @@
+// backend/src/routes/questionRoutes.ts
 import { Router } from "express";
-import { authenticateToken, authenticateTokenOptional } from "../middleware/auth";
+import { authenticateToken, authenticateTokenOptional } from "../middleware/auth"; // Đảm bảo import đủ
 import { 
   getQuestionsByEvent, 
-  createQuestion,       // [Mới] Import thêm
-  voteQuestion,         // [Mới] Import thêm
+  createQuestion,
+  voteQuestion,
   updateQuestion, 
   deleteQuestion 
+} from "../controllers/questionController";
+import { 
+  votePoll // [MỚI]
 } from "../controllers/questionController";
 
 const router = Router();
 
-// 1. Lấy danh sách câu hỏi
-// Frontend gọi: GET /api/questions?eventId=...
-// Controller dùng: req.query.eventId
-// -> Route phải là "/" thay vì "/event/:eventId"
 router.get("/", authenticateTokenOptional, getQuestionsByEvent);
+router.post("/", authenticateTokenOptional, createQuestion);
 
-// 2. Tạo câu hỏi mới
-// Frontend gọi: POST /api/questions
-router.post("/", authenticateToken, createQuestion);
+// [SỬA] Đổi thành Optional để Guest cũng vote được
+router.post("/:questionId/vote", authenticateTokenOptional, voteQuestion);
+// [MỚI] Route cho Poll Vote (Dùng Optional Auth để ẩn danh cũng vote được)
+router.post("/:questionId/poll-vote", authenticateTokenOptional, votePoll);
 
-// 3. Vote câu hỏi
-// Frontend gọi: POST /api/questions/:id/vote
-router.post("/:questionId/vote", authenticateToken, voteQuestion);
-
-// 4. Các hành động quản lý (Sửa/Xóa)
 router.patch("/:id", authenticateToken, updateQuestion);
 router.delete("/:id", authenticateToken, deleteQuestion);
 

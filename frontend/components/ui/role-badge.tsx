@@ -10,26 +10,12 @@ interface RoleBadgeProps {
 
 export function RoleBadge({ role, className }: RoleBadgeProps) {
   // Chuẩn hóa role về chữ thường hoặc hoa tùy theo dữ liệu trả về từ DB
-  const normalizedRole = role?.toUpperCase();
+    const r = role?.toUpperCase();
 
-  if (normalizedRole === "ORGANIZER") {
-    return (
-      <Badge variant="default" className={`bg-primary/90 hover:bg-primary gap-1 ${className}`}>
-        <ShieldCheck className="w-3 h-3" />
-        Tổ chức
-      </Badge>
-    );
-  }
-
-  if (normalizedRole === "MODERATOR") {
-    return (
-      <Badge variant="secondary" className={`bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 gap-1 ${className}`}>
-        <Shield className="w-3 h-3" />
-        Điều phối
-      </Badge>
-    );
-  }
-
-  // Mặc định là Participant thì không hiện hoặc hiện badge đơn giản tùy bạn
-  return null; 
+    if (r === 'HOST' || r === 'ORGANIZER') return <Badge className={`bg-red-100 text-red-700 hover:bg-red-200 border-red-200 ${className}`}>Host</Badge>
+    if (r === 'MODERATOR') return <Badge className={`bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 ${className}`}>Mod</Badge>
+    if (r === 'MEMBER') return <Badge variant="outline" className={className}>Thành viên</Badge>
+    // [MỚI] Thêm badge cho khách/ẩn danh
+    if (r === 'ANONYMOUS' || r === 'GUEST') return <Badge variant="secondary" className={`text-xs px-1 py-0 h-5 text-gray-500 ${className}`}>Khách</Badge>
+    return null // Participant thường không cần badge để đỡ rối
 }

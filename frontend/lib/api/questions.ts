@@ -17,8 +17,8 @@ export const questionApi = {
     apiClient.post<Question>('/questions', data),
 
   // Vote (Upvote/Downvote)
-  vote: (questionId: string, type: 'UPVOTE' | 'DOWNVOTE') => 
-    apiClient.post(`/questions/${questionId}/vote`, { type }),
+  vote: (questionId: string, type: 'UPVOTE' | 'DOWNVOTE', guestId?: string) => 
+    apiClient.post(`/questions/${questionId}/vote`, { type, guestId }),
 
   // Hàm update đa năng cho Admin (Ghim, Ẩn, Trả lời)
   update: (questionId: string, data: { isPinned?: boolean; isAnswered?: boolean; status?: string }) => 
@@ -26,6 +26,17 @@ export const questionApi = {
     
   delete: (questionId: string) =>
     apiClient.delete(`/questions/${questionId}`),
+  // [MỚI] Lấy danh sách bình luận
+  getAnswers: (questionId: string) => 
+    apiClient.get<any[]>(`/answers/${questionId}`),
+
+  // [MỚI] Gửi bình luận/trả lời
+  createAnswer: (data: { questionId: string; content: string; guestName?: string }) => 
+    apiClient.post('/answers', data),
+
+  // [MỚI] Vote cho Poll/Quiz
+  votePoll: (questionId: string, optionId: string, guestId?: string) => 
+    apiClient.post(`/questions/${questionId}/poll-vote`, { questionId, optionId, guestId }),
 };
 
 // [QUAN TRỌNG] Export hàm này để QuestionForm sử dụng

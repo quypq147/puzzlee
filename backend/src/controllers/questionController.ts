@@ -1,3 +1,63 @@
+// [MỚI] Vote cho Poll/Quiz (Single Choice, hỗ trợ ẩn danh)
+export const votePoll = async (req: Request, res: Response) => {
+  try {
+    const { questionId, optionId, guestId } = req.body;
+    const user = (req as any).user;
+    const userId = user?.userId || null;
+
+    if (!userId && !guestId) {
+      return res.status(400).json({ message: "Thiếu thông tin người vote" });
+    }
+
+    // Transaction để đảm bảo tính toàn vẹn
+    const updatedQuestion = await prisma.$transaction(async (tx) => {
+      // 1. Tìm tất cả option của câu hỏi này
+      const options = await tx.pollOption.findMany({
+        where: { questionId },
+        select: { id: true }
+      });
+      const optionIds = options.map(o => o.id);
+
+      // 2. Xóa vote cũ của người này trong câu hỏi này (nếu có) - Cơ chế Single Choice
+      await tx.pollVote.deleteMany({
+        where: {
+          pollOptionId: { in: optionIds },
+          ...(userId ? { userId } : { guestId })
+        }
+      });
+
+      // 3. Tạo vote mới
+      await tx.pollVote.create({
+        data: {
+          pollOptionId: optionId,
+          userId,
+          guestId: userId ? null : guestId
+        }
+      });
+
+      // 4. Trả về data mới nhất của câu hỏi để cập nhật UI
+      return await tx.question.findUnique({
+        where: { id: questionId },
+        include: {
+            author: { select: { id: true, fullName: true, avatarUrl: true } },
+            pollOptions: {
+                include: {
+                    _count: { select: { votes: true } }
+                }
+            }
+        }
+      });
+    });
+
+    const io = req.app.get('io');
+    io.to(updatedQuestion?.eventId).emit('question:updated', updatedQuestion);
+
+    res.json(updatedQuestion);
+  } catch (error) {
+    console.error("Poll Vote Error:", error);
+    res.status(500).json({ message: "Lỗi bình chọn" });
+  }
+};
 import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { QuestionType } from "../../generated/prisma"; // Import Enum từ Prisma
@@ -20,7 +80,8 @@ async function resolveEventId(idOrCode: string): Promise<string | null> {
 // 1. Lấy danh sách câu hỏi
 export const getQuestionsByEvent = async (req: Request, res: Response) => {
   try {
-    let { eventId } = req.query;
+    // 1. [SỬA] Lấy thêm tham số 'type' từ query
+    let { eventId, type } = req.query;
     if (!eventId) return res.status(400).json({ message: "Thiếu eventId" });
 
     const realEventId = await resolveEventId(eventId as string);
@@ -29,10 +90,12 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userId = user?.userId || "";
     
+    // 2. [SỬA] Thêm điều kiện lọc vào Prisma query
     const questions = await prisma.question.findMany({
       where: { 
         eventId: realEventId,
-        status: { not: "HIDDEN" }
+        status: { not: "HIDDEN" },
+        ...(type ? { type: type as any } : {})
       },
       include: {
         author: {
@@ -107,38 +170,45 @@ export const getQuestionsByEvent = async (req: Request, res: Response) => {
 // 2. Tạo câu hỏi mới (Hỗ trợ Q&A, Poll, Quiz)
 export const createQuestion = async (req: Request, res: Response) => {
   try {
-    const { content, isAnonymous, eventId, type, pollOptions } = req.body;
+    const { content, isAnonymous, eventId, type, pollOptions, guestName } = req.body;
     const user = (req as any).user;
-    const userId = user?.userId || null; 
-
+    const userId = user?.userId || null;
 
     // [FIX] Convert Code -> UUID
     const realEventId = await resolveEventId(eventId);
     if (!realEventId) return res.status(404).json({ message: "Sự kiện không tồn tại" });
 
     let finalAuthorId = userId;
-    if (isAnonymous) finalAuthorId = null;
+    let finalGuestName = null;
+
+    if (!userId) {
+      // Nếu không đăng nhập -> Bắt buộc phải có tên khách
+      if (!guestName) return res.status(400).json({ message: "Vui lòng nhập tên để tham gia" });
+      finalGuestName = guestName;
+    } else if (isAnonymous) {
+      // Nếu đã đăng nhập nhưng chọn ẩn danh -> set authorId = null
+      finalAuthorId = null;
+      // Có thể lưu guestName là "Ẩn danh" hoặc tên thật tuỳ bạn
+    }
+
     // Validate loại câu hỏi
-    const questionType = (type && ['QA', 'POLL', 'QUIZ'].includes(type)) 
-      ? type as QuestionType 
+    const questionType = (type && ['QA', 'POLL', 'QUIZ'].includes(type))
+      ? type as QuestionType
       : QuestionType.QA;
 
     const newQuestion = await prisma.question.create({
       data: {
         content,
-        isAnonymous : isAnonymous || false,
+        isAnonymous: !!isAnonymous,
         eventId: realEventId,
         authorId: finalAuthorId,
-        status: "PENDING", // Hoặc APPROVED tuỳ setting
+        guestName: finalGuestName,
+        status: "PENDING",
         type: questionType,
-        
-        // [MỚI] Tạo options nếu là Poll/Quiz
         pollOptions: (questionType !== 'QA' && Array.isArray(pollOptions)) ? {
-            create: pollOptions.map((opt: any) => ({
-                content: opt.content
-                // Lưu ý: Database hiện tại chưa có trường isCorrect cho Quiz trong PollOption
-                // Nếu muốn làm Quiz, cần thêm field `isCorrect Boolean @default(false)` vào model PollOption
-            }))
+          create: pollOptions.map((opt: any) => ({
+            content: opt.content
+          }))
         } : undefined
       },
       include: {
@@ -150,7 +220,6 @@ export const createQuestion = async (req: Request, res: Response) => {
     // Realtime: Emit đúng room (dùng Code hay ID tuỳ frontend join room nào, thống nhất dùng Event ID cho an toàn)
     const io = req.app.get('io');
     io.to(realEventId).emit('question:created', newQuestion);
-    // Emit thêm vào room code để chắc chắn (nếu frontend join bằng code)
     io.to(eventId).emit('question:created', newQuestion);
 
     res.status(201).json(newQuestion);
@@ -164,18 +233,46 @@ export const createQuestion = async (req: Request, res: Response) => {
 export const voteQuestion = async (req: Request, res: Response) => {
   try {
     const { questionId } = req.params;
-    const { type } = req.body; 
-    const userId = (req as any).user.userId;
+    const { type, guestId } = req.body; // [MỚI] Nhận thêm guestId từ body
+    
+    // Lấy user từ token (nếu có)
+    const user = (req as any).user;
+    const userId = user?.userId || null;
+
+    // Validate: Phải có ít nhất 1 định danh (User hoặc Guest)
+    if (!userId && !guestId) {
+      return res.status(400).json({ message: "Thiếu thông tin người vote (userId hoặc guestId)" });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Upsert vote
-      await tx.vote.upsert({
-        where: { questionId_userId: { questionId, userId } },
-        update: { type },
-        create: { questionId, userId, type }
+      // Tìm vote cũ xem đã tồn tại chưa
+      // Vì userId và guestId là 2 trường riêng biệt, ta cần query linh hoạt
+      const existingVote = await tx.vote.findFirst({
+        where: {
+          questionId,
+          ...(userId ? { userId } : { guestId })
+        }
       });
 
-      // Recalculate score
+      if (existingVote) {
+        // Nếu đã có -> Update
+        await tx.vote.update({
+          where: { id: existingVote.id },
+          data: { type }
+        });
+      } else {
+        // Chưa có -> Tạo mới
+        await tx.vote.create({
+          data: {
+            questionId,
+            type,
+            userId: userId,     // Có thể null
+            guestId: userId ? null : guestId // Nếu không có userId thì lưu guestId
+          }
+        });
+      }
+
+      // Recalculate score (Giữ nguyên logic cũ)
       const upvotesCount = await tx.vote.count({ where: { questionId, type: 'UPVOTE' } });
       const downvotesCount = await tx.vote.count({ where: { questionId, type: 'DOWNVOTE' } });
       const newScore = upvotesCount - downvotesCount;
@@ -196,7 +293,7 @@ export const voteQuestion = async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error(error);
+    console.error("Vote Error:", error);
     res.status(500).json({ message: "Lỗi vote câu hỏi" });
   }
 };

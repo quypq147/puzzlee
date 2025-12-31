@@ -5,7 +5,7 @@ export default async function PollsPage({ params }: { params: Promise<{ code: st
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Các cuộc bình chọn</h2>
-      <QuestionsList eventId={code} type="poll" />
+      <QuestionsList eventId={code} type="POLL" />
     </div>
   )
 }

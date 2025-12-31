@@ -63,25 +63,64 @@ export const getEventsByOrg = async (req: Request, res: Response) => {
 // Join event (Người tham gia nhập code)
 export const joinEventByCode = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId; // Có thể null nếu là guest (tuỳ logic)
-    const { code } = req.body;
+    // 1. FIX CRASH: Dùng optional chaining (?.) để lấy userId an toàn
+    // Nếu là khách, userId sẽ là undefined thay vì gây lỗi
+    const userId = (req as any).user?.userId; 
+    
+    // Lấy thêm nickname từ body (do Frontend gửi lên)
+    const { code, nickname } = req.body;
 
+    // 2. Tìm sự kiện
     const event = await prisma.event.findUnique({ where: { code } });
-    if (!event) return res.status(404).json({ message: 'Event not found' });
+    
+    if (!event) {
+        return res.status(404).json({ message: 'Sự kiện không tồn tại' });
+    }
+    
+    if (!event.isActive) {
+        return res.status(400).json({ message: 'Sự kiện đã kết thúc' });
+    }
 
-    // Add user to event members (Participant)
-    const member = await prisma.eventMember.create({
-      data: {
-        eventId: event.id,
-        userId: userId,
-        role: 'PARTICIPANT'
+    // 3. Xử lý lưu Member vào DB
+    if (userId) {
+      // TRƯỜNG HỢP 1: Đã đăng nhập -> Lưu vào DB
+      // Kiểm tra xem đã join chưa để tránh lỗi Duplicate Key
+      const existingMember = await prisma.eventMember.findUnique({
+        where: {
+          eventId_userId: { eventId: event.id, userId }
+        }
+      });
+
+      if (!existingMember) {
+        await prisma.eventMember.create({
+          data: {
+            eventId: event.id,
+            userId: userId,
+            role: 'PARTICIPANT'
+          }
+        });
       }
+    } else {
+      // TRƯỜNG HỢP 2: Khách ẩn danh
+      // HIỆN TẠI: Schema DB của bạn yêu cầu "userId" bắt buộc trong bảng "EventMember".
+      // Do đó, ta KHÔNG THỂ lưu khách vào DB lúc này (trừ khi sửa Schema).
+      // GIẢI PHÁP: Chỉ trả về thành công để Frontend cho vào phòng.
+      // (Khách sẽ tương tác qua Socket hoặc API với danh nghĩa ẩn danh sau)
+      
+      console.log(`Khách ${nickname || 'Ẩn danh'} đang tham gia sự kiện ${code}`);
+    }
+
+    // 4. Trả về kết quả thành công
+    res.json({ 
+        message: 'Joined successfully', 
+        event,
+        // Trả lại nickname để frontend lưu vào session/localStorage nếu cần
+        guestName: nickname || "Anonymous" 
     });
 
-    res.json({ message: 'Joined successfully', event });
   } catch (error) {
-    // Check lỗi duplicate key (đã join rồi)
-    res.status(500).json({ message: 'Could not join event' });
+    console.error("Join Error:", error); // Log lỗi ra terminal để dễ debug
+    res.status(500).json({ message: 'Lỗi server khi tham gia phòng' });
   }
 };
 export const getEventByCode = async (req: Request, res: Response) => {
