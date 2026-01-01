@@ -7,13 +7,14 @@ interface UseEventRealtimeProps {
   eventId: string;
   onNewQuestion?: (q: Question) => void;
   onUpdateVote?: (data: any) => void;
+  onQuestionDeleted?: (id: string) => void; // Thêm props này
 }
 
-// Wrapper để tương thích ngược (nếu cần)
-export function useEventRealtime({ eventId, onNewQuestion, onUpdateVote }: UseEventRealtimeProps) {
+export function useEventRealtime({ eventId, onNewQuestion, onUpdateVote, onQuestionDeleted }: UseEventRealtimeProps) {
   useRealtimeQuestions({
     eventId,
     onNewQuestion,
-    onNewVote: onUpdateVote
+    onNewVote: onUpdateVote,
+    onQuestionDeleted: onQuestionDeleted // Truyền xuống
   });
 }

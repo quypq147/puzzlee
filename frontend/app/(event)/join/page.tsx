@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
-import {questionApi} from "@/lib/api/questions"// API mới
+import { useToast } from "@/hooks/use-toast";
+import { eventApi } from "@/lib/api/event"; // Kiểm tra kỹ tên file là event.ts hay events.ts
 
 export default function JoinPage() {
   const [code, setCode] = useState("");
@@ -14,26 +14,41 @@ export default function JoinPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Chỉ lấy chữ/số và viết hoa, loại bỏ ký tự đặc biệt
+    const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    setCode(value);
+  };
+
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    console.log("Đã bấm nút tham gia, code:", code); // Dòng này giúp debug
+
+    // 1. Validate: Nếu thiếu ký tự thì báo lỗi thay vì im lặng
+    if (code.length < 5) {
+        toast({
+            variant: "destructive",
+            title: "Mã chưa hợp lệ",
+            description: "Mã sự kiện phải có đủ 6 ký tự (Ví dụ: AB12CD).",
+        });
+        return;
+    }
     
     setLoading(true);
     try {
-      // Gọi API tham gia (Check code + Add member)
-      const res = await questionApi.join(code.toUpperCase());
+      console.log("Đang gọi API join...");
+      await eventApi.join(code);
+      
       toast({ title: "Thành công", description: "Đang vào phòng..." });
       
-      // Chuyển hướng tới trang Room
-      // Lưu ý: Route của bạn là /dashboard/events/[code] (cho Host) 
-      // hoặc /(event)/[code] (cho Member). Hãy chắc chắn redirect đúng.
-      // Ở đây tôi giả định Member view:
-      router.push(`/${code.toUpperCase()}`); 
+      // Chuyển hướng
+      router.push(`/${code}`); 
     } catch (error: any) {
+      console.error("Lỗi join:", error);
       toast({
         variant: "destructive",
-        title: "Lỗi",
-        description: error.message || "Mã sự kiện không hợp lệ",
+        title: "Lỗi tham gia",
+        description: error?.response?.data?.message || "Không tìm thấy phòng hoặc lỗi kết nối.",
       });
     } finally {
       setLoading(false);
@@ -42,21 +57,27 @@ export default function JoinPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Tham gia sự kiện</CardTitle>
-          <CardDescription>Nhập mã code được cung cấp bởi Host</CardDescription>
+          <CardTitle className="text-2xl font-bold">Puzzlee Join</CardTitle>
+          <CardDescription>Nhập mã PIN để tham gia</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleJoin} className="space-y-4">
             <Input
-              placeholder="Ví dụ: AB12CD"
-              className="text-center text-lg uppercase tracking-widest"
+              placeholder="CODE"
+              className="text-center text-3xl uppercase tracking-widest font-bold h-14"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              maxLength={6}
+              onChange={handleInputChange}
+              maxLength={5}
+              disabled={loading}
+              autoFocus // Tự động focus để nhập luôn
             />
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+                type="submit" 
+                className="w-full h-12 text-lg cursor-pointer"
+                disabled={loading} // Chỉ disable khi đang tải, cho phép bấm để hiện lỗi validate
+            >
               {loading ? "Đang kiểm tra..." : "Vào phòng ngay"}
             </Button>
           </form>

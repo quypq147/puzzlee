@@ -105,7 +105,7 @@ export function QuestionManager({ eventId, eventCode }: QuestionManagerProps) {
   return (
     <div className="space-y-4 h-full flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-sm border p-4">
       {/* Header Toolbar */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 flex-none">
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -120,17 +120,17 @@ export function QuestionManager({ eventId, eventCode }: QuestionManagerProps) {
         </Button>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-4 md:w-auto md:inline-flex bg-gray-100 dark:bg-gray-800">
+      {/* Tabs - Thêm min-h-0 để tránh lỗi flexbox trên một số trình duyệt */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+        <TabsList className="grid w-full grid-cols-4 md:w-auto md:inline-flex bg-gray-100 dark:bg-gray-800 flex-none">
           <TabsTrigger value="all">Công khai ({questions.filter(q => q.status !== 'HIDDEN').length})</TabsTrigger>
           <TabsTrigger value="pinned" className="data-[state=active]:text-orange-600"><Pin className="w-3 h-3 mr-1"/> Ghim</TabsTrigger>
           <TabsTrigger value="answered" className="data-[state=active]:text-green-600"><CheckCircle2 className="w-3 h-3 mr-1"/> Đã trả lời</TabsTrigger>
           <TabsTrigger value="hidden" className="data-[state=active]:text-gray-500"><EyeOff className="w-3 h-3 mr-1"/> Đã ẩn</TabsTrigger>
         </TabsList>
 
-        {/* List */}
-        <div className="mt-4 flex-1 overflow-y-auto pr-2 space-y-3 min-h-[400px]">
+        {/* List: Đây là phần quan trọng nhất để cuộn */}
+        <div className="mt-4 flex-1 overflow-y-auto pr-2 space-y-3">
           {loading ? (
              Array.from({ length: 3 }).map((_, i) => (
                <Skeleton key={i} className="h-32 w-full rounded-lg" />
@@ -144,7 +144,6 @@ export function QuestionManager({ eventId, eventCode }: QuestionManagerProps) {
               <div key={q.id} className="relative group transition-all hover:ring-1 hover:ring-primary/20 rounded-xl">
                  {/* Render câu hỏi (cần chỉnh QuestionCard để nhận type Question mới) */}
                  <QuestionCard question={q} />
-                 
                  {/* Admin Actions Overlay (Hiện khi hover) */}
                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-800 p-1 rounded-md shadow-sm border">
                     <Button 
@@ -153,14 +152,12 @@ export function QuestionManager({ eventId, eventCode }: QuestionManagerProps) {
                     >
                         <Pin className="h-4 w-4" fill={q.isPinned ? "currentColor" : "none"} />
                     </Button>
-                    
                     <Button 
                         size="icon" variant="ghost" className={`h-8 w-8 ${q.isAnswered ? 'text-green-600 bg-green-50' : 'text-gray-400'}`} 
                         onClick={() => handleModerate(q.id, 'answer')} title="Đánh dấu đã trả lời"
                     >
                         <CheckCircle2 className="h-4 w-4" />
                     </Button>
-
                     {q.status === 'HIDDEN' ? (
                        <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-500 hover:text-blue-600" onClick={() => handleModerate(q.id, 'show')} title="Hiện lại">
                          <Archive className="h-4 w-4" />
@@ -170,7 +167,6 @@ export function QuestionManager({ eventId, eventCode }: QuestionManagerProps) {
                          <EyeOff className="h-4 w-4" />
                        </Button>
                     )}
-                    
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-red-600" onClick={() => { if(confirm('Xóa vĩnh viễn câu này?')) handleModerate(q.id, 'delete') }} title="Xóa">
                         <Trash2 className="h-4 w-4" />
                     </Button>

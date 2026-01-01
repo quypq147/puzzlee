@@ -6,15 +6,16 @@ import {
   getEventByCode, // Import mới
   updateEvent,    // Import mới
   deleteEvent,     // Import mới
-  getEventStats
+  getEventStats,
+  getEventByCodePublic
 } from '../controllers/eventController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
 // Public / Guest (Nếu cần)
-router.post('/join', authenticateToken, joinEventByCode); 
-
+router.post('/join', joinEventByCode); 
+router.get("/code/:code", getEventByCodePublic);
 // Protected Routes
 router.post('/', authenticateToken, createEvent);
 router.get('/org/:orgId', authenticateToken, getEventsByOrg);

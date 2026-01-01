@@ -24,6 +24,7 @@ enum EventRole {
   HOST        // Người chủ trì sự kiện (trong context 1 event cụ thể)
   MODERATOR   // Trợ giảng/Duyệt câu hỏi
   PARTICIPANT // Người tham gia
+  ANONYMOUS   // Người tham gia ẩn danh
 }
 
 // Các enum khác giữ nguyên
@@ -43,6 +44,11 @@ enum QuestionType {
 enum VoteType {
   UPVOTE
   DOWNVOTE
+}
+enum NotificationType {
+  INFO
+  WARNING
+  ALERT
 }
 
 
@@ -99,6 +105,7 @@ model User {
   notifications Notification[]
 
   @@map("users")
+  pollVotes PollVote[]
 }
 
 model Event {
@@ -152,9 +159,13 @@ model Question {
   isAnswered   Boolean        @default(false)
   status       QuestionStatus @default(PENDING) // Mặc định chờ duyệt nếu bật chế độ duyệt
   type         QuestionType   @default(QA)
-  
+
+  // [MỚI] Media hỗ trợ ảnh/video
+  mediaUrl     String?
+  mediaType    String?
+
   upvotes      Int            @default(0) // Cache số lượng vote để query nhanh (Denormalization có kiểm soát)
-  
+
   eventId      String
   event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -170,6 +181,9 @@ model Question {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  guestName String?
+  guestMeta Json?
+
   @@index([eventId, status]) // Query phổ biến: Lấy tất cả câu hỏi đã duyệt của Event X
   @@map("questions")
 }
@@ -178,6 +192,8 @@ model Question {
 model PollOption {
   id          String   @id @default(uuid())
   content     String
+  isCorrect   Boolean    @default(false)
+
   questionId  String
   question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   
@@ -189,14 +205,20 @@ model PollOption {
 // Lưu vote cho Poll
 model PollVote {
   id           String     @id @default(uuid())
-  optionId     String
-  userId       String
   
-  option       PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  // Không cần relation User nếu không muốn track kỹ, nhưng nên có để tránh vote trùng
-  
-  @@unique([optionId, userId]) // Mỗi người chỉ chọn 1 option (hoặc bỏ unique nếu cho chọn nhiều)
-  @@map("poll_votes")
+  pollOptionId String
+  pollOption   PollOption @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  guestId      String?    // [QUAN TRỌNG] Định danh người dùng ẩn danh
+
+  createdAt    DateTime   @default(now())
+
+  // Đảm bảo mỗi người chỉ vote 1 lần cho 1 option (Logic 1 vote/câu hỏi sẽ xử lý ở Controller)
+  @@unique([pollOptionId, userId])
+  @@unique([pollOptionId, guestId])
 }
 
 model Answer {
@@ -207,8 +229,9 @@ model Answer {
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  authorId   String
-  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  guestName  String?
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -224,10 +247,13 @@ model Vote {
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([questionId, userId]) // Một người chỉ vote 1 lần cho 1 câu hỏi
+  guestId    String?
+
+  @@unique([questionId, userId]) 
+  @@unique([questionId, guestId])
   @@map("votes")
 }
 
@@ -238,10 +264,11 @@ model Comment {
   
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
 
-  authorId   String
-  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
+  authorId   String?
+  author     User?     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  guestName  String?
   createdAt  DateTime @default(now())
   
   @@map("comments")

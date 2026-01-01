@@ -8,6 +8,8 @@ import organizationRoutes from './routes/organizationRoutes';
 import eventRoutes from './routes/eventRoutes';
 import questionRoutes from './routes/questionRoutes';
 import userRoutes from './routes/userRoutes';
+import answerRoutes from './routes/answerRoutes'; 
+import commentRoutes from './routes/commentRoutes';
 
 dotenv.config();
 
@@ -29,7 +31,7 @@ app.set('io', io);
 console.log("Server bat dau chay...");
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`User conn  ected: ${socket.id}`);
   
   socket.on('join-event', ({ eventId }) => {
     socket.join(eventId);
@@ -47,7 +49,7 @@ app.use((req, res, next) => {
     let data = '';
     req.on('data', chunk => { data += chunk; });
     req.on('end', () => {
-      console.log('Raw body received:', data); // Xem nó in ra cái gì?
+      console.log('Raw body received:', data);
     });
   }
   next();
@@ -56,10 +58,13 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/answers', answerRoutes); // <--- BẮT BUỘC PHẢI CÓ DÒNG NÀY
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/questions', questionRoutes);
+app.use('/api/answers', answerRoutes);
+app.use('/api/comments', commentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Puzzlee Backend dang chay!');

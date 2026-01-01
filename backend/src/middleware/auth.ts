@@ -28,24 +28,30 @@ export const requireOrgRole = (roles: OrganizationRole[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = (req as any).user?.userId;
-      // Lấy orgId từ params (:id) hoặc body
-      const organizationId = req.params.id || req.body.organizationId || req.query.organizationId;
+      // [FIX 403] Kiểm tra kỹ hơn các biến thể của ID (id, orgId, organizationId)
+      // Do route thường là /organizations/:id/members nên ưu tiên lấy params.id
+      const organizationId = req.params.id || req.params.orgId || req.body.organizationId || req.query.organizationId;
 
       if (!organizationId) {
-        return res.status(400).json({ message: "Thiếu organizationId" });
+        return res.status(400).json({ message: "Thiếu organizationId để xác thực quyền" });
       }
 
+      // Check member trong DB
       const member = await prisma.organizationMember.findUnique({
         where: {
           userId_organizationId: {
             userId: userId,
-            organizationId: String(organizationId)
+            organizationId: String(organizationId) // Ép kiểu string cho chắc chắn
           }
         }
       });
 
-      if (!member || !roles.includes(member.role)) {
-        return res.status(403).json({ message: "Bạn không có quyền trong tổ chức này" });
+      if (!member) {
+         return res.status(403).json({ message: "Bạn không phải thành viên của tổ chức này" });
+      }
+
+      if (!roles.includes(member.role)) {
+        return res.status(403).json({ message: "Quyền hạn không đủ (Require: " + roles.join(', ') + ")" });
       }
 
       next();
@@ -107,4 +113,26 @@ export const requireEventRole = (roles: EventRole[]) => {
       res.status(500).json({ message: "Lỗi xác thực quyền sự kiện" });
     }
   };
+};
+export const authenticateTokenOptional = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    // Không có token -> Gán role ảo là ANONYMOUS vào request
+    (req as any).user = { 
+       userId: null, 
+       role: 'ANONYMOUS' // Đánh dấu đây là khách
+    };
+    return next();
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'secret', (err: any, user: any) => {
+    if (err) {
+      (req as any).user = { userId: null, role: 'ANONYMOUS' };
+    } else {
+      (req as any).user = user;
+    }
+    next();
+  });
 };

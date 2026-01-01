@@ -18,19 +18,20 @@ export default function EventQuestionsPage({ params }: { params: Promise<{ code:
 
   if (!eventData) return <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
 
-  return (
-    <div className="h-full p-4 md:p-6 bg-[#f8f9fb] dark:bg-[#122017]">
-      <div className="max-w-5xl mx-auto h-full">
-         <div className="mb-4">
-            <h2 className="text-2xl font-bold tracking-tight">Quản lý câu hỏi</h2>
-            <p className="text-muted-foreground">Duyệt, ghim và trả lời câu hỏi từ người tham gia.</p>
-         </div>
-         
-         {/* Render trình quản lý */}
-         <div className="h-[calc(100vh-180px)]">
-            <QuestionManager eventId={eventData.id} eventCode={code} />
-         </div>
+    return (
+     <div className="h-full p-4 md:p-6 bg-[#f8f9fb] dark:bg-[#122017]">
+      {/* [SỬA 1] Thêm 'flex flex-col' để quản lý chiều cao dọc */}
+      <div className="max-w-5xl mx-auto h-full flex flex-col">
+        {/* Header giữ nguyên chiều cao tự nhiên */}
+        <div className="mb-4 flex-none">
+          <h2 className="text-2xl font-bold tracking-tight">Quản lý câu hỏi</h2>
+          <p className="text-muted-foreground">Duyệt, ghim và trả lời câu hỏi từ người tham gia.</p>
+        </div>
+        {/* [SỬA 2] Wrapper này giúp QuestionManager chỉ chiếm phần còn lại (flex-1) và không bị tràn (min-h-0) */}
+        <div className="flex-1 min-h-0">
+          <QuestionManager eventId={eventData.id} eventCode={code} />
+        </div>
       </div>
-    </div>
-  )
+     </div>
+    )
 }

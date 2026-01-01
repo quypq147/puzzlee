@@ -23,7 +23,7 @@ async function getEventByCode(code: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
-  const event = await getEventByCode(code); //
+  const event = await getEventByCode(code); 
 
   return {
     title: event ? `${event.title} - Puzzlee` : "Tham gia sự kiện",
@@ -32,12 +32,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EventPage({ params }: Props) {
   const { code } = await params;
-  const event = await getEventByCode(code); //
+  const event = await getEventByCode(code);
 
   if (!event) {
     return notFound();
   }
 
-  // Truyền dữ liệu event xuống Client Component
-  return <RoomClient event={event} />;
+  // [FIX] Truyền đúng từng prop thay vì truyền cả object 'event'
+  return <RoomClient eventId={event.id} eventCode={event.code} />;
 }
