@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { QuestionCard } from "./question-card"
-import { Button } from "@/components/ui/button"
-import { Loader2, Bell } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
-import { useEventRealtime } from "@/hooks/use-event-realtime"
 import { Question } from "@/types/custom"
+import { useRealtimeQuestions } from "@/hooks/use-realtime-questions"
+import { toast } from "sonner"
 
 interface RealtimeQuestionsListProps {
   eventId: string
@@ -17,18 +17,17 @@ export function RealtimeQuestionsList({ eventId, hostId }: RealtimeQuestionsList
   const [questions, setQuestions] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<"newest" | "popular">("newest")
-  const [newQuestionsQueue, setNewQuestionsQueue] = useState<Question[]>([])
+  // Remove queue, show new questions instantly
 
   // Hàm tải danh sách câu hỏi ban đầu
   const loadQuestions = useCallback(async () => {
     try {
       setLoading(true)
-      // Gọi API Node.js: GET /api/questions?eventId=...
-      const data = await apiClient<Question[]>(`/questions?eventId=${eventId}`)
-      setQuestions(data || [])
-      setNewQuestionsQueue([]) // Reset hàng đợi khi reload
+      const res = await apiClient.get(`/questions?eventId=${eventId}`)
+      setQuestions(Array.isArray(res.data) ? res.data : [])
     } catch (error) {
-      console.error("Failed to load questions:", error)
+      console.error("Failed to load questions", error)
+      toast.error("Không thể tải danh sách câu hỏi")
     } finally {
       setLoading(false)
     }
@@ -38,65 +37,58 @@ export function RealtimeQuestionsList({ eventId, hostId }: RealtimeQuestionsList
     loadQuestions()
   }, [loadQuestions])
 
-  // Tích hợp Real-time (Socket.io)
-  useEventRealtime({
+  // Real-time: show new questions instantly
+  useRealtimeQuestions({
     eventId,
     onNewQuestion: (newQ) => {
-      // Khi có câu hỏi mới, đưa vào hàng đợi thông báo (tránh nhảy layout đột ngột)
-      setNewQuestionsQueue((prev) => [newQ, ...prev])
+      setQuestions((prev) => [newQ, ...prev])
+      toast.info("Có câu hỏi mới!", {
+        description: newQ.content ? newQ.content.substring(0, 40) + "..." : "Xem ngay"
+      })
     },
-    onUpdateVote: (updatedQ) => {
-      // Cập nhật vote ngay lập tức
-      setQuestions((prev) => 
-        prev.map((q) => (q.id === updatedQ.id ? { ...q, score: updatedQ.score } : q))
+    onUpdateQuestion: (updatedQ) => {
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === updatedQ.id ? { ...q, ...updatedQ } : q))
       )
+    },
+    onQuestionDeleted: (deletedId) => {
+      setQuestions((prev) => prev.filter((q) => q.id !== deletedId))
+      toast.warning("Một câu hỏi đã bị xóa.")
     }
   })
 
-  // Hàm merge câu hỏi mới vào danh sách chính
-  const handleLoadNewQuestions = () => {
-    setQuestions((prev) => [...newQuestionsQueue, ...prev])
-    setNewQuestionsQueue([])
-  }
-
-  const sortedQuestions = [...questions].sort((a, b) => {
-    if (sortBy === "popular") {
-      // Ưu tiên score cao, nếu bằng thì cái nào mới hơn lên trên
-      return (b.score || 0) - (a.score || 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    }
-    // Mới nhất
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  })
+  // Sort logic
+  const sortedQuestions = useMemo(() => {
+    const sorted = [...questions];
+    return sorted.sort((a, b) => {
+      // Ghim luôn lên đầu
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (sortBy === "popular") {
+        return (b.upvotes || 0) - (a.upvotes || 0);
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [questions, sortBy]);
 
   return (
     <div className="space-y-4">
-      {/* Header & Filter */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-2">
-          <Button variant={sortBy === "newest" ? "default" : "outline"} onClick={() => setSortBy("newest")} size="sm">
-            Mới nhất
-          </Button>
-          <Button variant={sortBy === "popular" ? "default" : "outline"} onClick={() => setSortBy("popular")} size="sm">
-            Phổ biến nhất
-          </Button>
-        </div>
-
-        {newQuestionsQueue.length > 0 && (
-          <Button size="sm" variant="outline" onClick={handleLoadNewQuestions} className="gap-2 animate-pulse border-primary text-primary">
-            <Bell className="h-4 w-4" />
-            Có {newQuestionsQueue.length} câu hỏi mới
-          </Button>
-        )}
+      {/* Filter Sort */}
+      <div className="flex gap-2 mb-2">
+        <button
+          className={`px-3 py-1 rounded ${sortBy === "newest" ? "bg-primary text-white" : "bg-muted"}`}
+          onClick={() => setSortBy("newest")}
+        >Mới nhất</button>
+        <button
+          className={`px-3 py-1 rounded ${sortBy === "popular" ? "bg-primary text-white" : "bg-muted"}`}
+          onClick={() => setSortBy("popular")}
+        >Phổ biến nhất</button>
       </div>
-
-      {/* List */}
       {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
       ) : sortedQuestions.length === 0 ? (
-        <div className="rounded-lg border border-dashed py-8 text-center">
-          <p className="text-muted-foreground">Chưa có câu hỏi nào. Hãy đặt câu hỏi đầu tiên!</p>
+        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+          Chưa có câu hỏi nào.
         </div>
       ) : (
         <div className="space-y-4">
@@ -104,7 +96,7 @@ export function RealtimeQuestionsList({ eventId, hostId }: RealtimeQuestionsList
             <QuestionCard 
               key={q.id} 
               question={q} 
-              // Truyền thêm prop nếu cần thiết để xử lý logic vote/delete trong Card
+              isHost={!!hostId} 
             />
           ))}
         </div>

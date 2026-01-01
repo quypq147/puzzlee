@@ -110,12 +110,21 @@ export const joinEventByCode = async (req: Request, res: Response) => {
       console.log(`Khách ${nickname || 'Ẩn danh'} đang tham gia sự kiện ${code}`);
     }
 
+
+    // [MỚI] Emit socket event để thông báo cho mọi người trong phòng biết có người mới
+    const io = req.app.get('io');
+    io.to(event.id).emit('participant:joined', {
+      guestName: nickname || "Ẩn danh",
+      userId: userId || null,
+      timestamp: new Date()
+    });
+
     // 4. Trả về kết quả thành công
     res.json({ 
-        message: 'Joined successfully', 
-        event,
-        // Trả lại nickname để frontend lưu vào session/localStorage nếu cần
-        guestName: nickname || "Anonymous" 
+      message: 'Joined successfully', 
+      event,
+      // Trả lại nickname để frontend lưu vào session/localStorage nếu cần
+      guestName: nickname || "Anonymous" 
     });
 
   } catch (error) {
